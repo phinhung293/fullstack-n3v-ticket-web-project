@@ -1,0 +1,11 @@
+# Chặn triệt để các file hệ thống và IDE ở thư mục gốc dự án
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+out/
+target/
+build/
