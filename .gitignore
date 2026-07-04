@@ -1,0 +1,26 @@
+# Chặn triệt để các file hệ thống và IDE ở thư mục gốc dự án
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+out/
+target/
+build/
+
+# Local config - không up thông tin database/mail thật
+application-local.properties
+backend/src/main/resources/application-local.properties
+
+# Frontend dependencies
+node_modules/
+frontend/node_modules/
+
+# Frontend build
+dist/
+frontend/dist/
+
+# Logs
+*.log

@@ -1,0 +1,20 @@
+# File nay dung de chay LOCAL. Khi deploy that, KHONG dua password/JWT secret len GitHub.
+# Neu ban dung Supabase, doi 3 dong datasource ben duoi theo Project Settings > Database > Connection string > JDBC.
+
+# Local PostgreSQL mac dinh:
+spring.datasource.url=jdbc:postgresql://localhost:5432/n3vticket
+spring.datasource.username=postgres
+spring.datasource.password=123456
+
+# Vi du Supabase, bo dau # va thay thong tin that neu can:
+# spring.datasource.url=jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require
+# spring.datasource.username=postgres.xxxxxxxxxxxxxxxxxxxx
+# spring.datasource.password=your-supabase-db-password
+
+# JWT secret phai dai toi thieu 32 ky tu.
+jwt.secret=n3v-ticket-local-dev-secret-key-please-change-this-before-production-2026
+jwt.expiration-ms=86400000
+
+# Gmail App Password, de trong thi backend van chay; forgot-password se in OTP ra console thay vi gui mail.
+spring.mail.username=
+spring.mail.password=
