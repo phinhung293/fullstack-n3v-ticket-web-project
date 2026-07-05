@@ -1,11 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { getAuthUser } from '../utils/authStorage';
 
 const sections = [
     {
         title: '1. Thông tin chúng tôi thu thập',
         content:
-            'Khi bạn đăng ký tài khoản, hệ thống có thể thu thập họ tên, email, số điện thoại, mật khẩu đã được mã hóa và các thông tin cần thiết để hỗ trợ quá trình đặt vé.',
+            'Khi bạn đăng ký tài khoản, hệ thống có thể thu thập họ tên, email, mật khẩu đã được mã hóa và các thông tin cần thiết để hỗ trợ quá trình đặt vé.',
     },
     {
         title: '2. Mục đích sử dụng thông tin',
@@ -36,6 +37,7 @@ const sections = [
 
 function Privacy() {
     const navigate = useNavigate();
+    const isLoggedIn = Boolean(localStorage.getItem('accessToken') || getAuthUser());
 
     return (
         <main className="min-h-screen bg-[#08051E] px-6 py-8 text-white">
@@ -51,10 +53,10 @@ function Privacy() {
                     </button>
 
                     <Link
-                        to="/register"
+                        to={isLoggedIn ? '/' : '/register'}
                         className="rounded-full bg-[#F43F73] px-5 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(244,63,115,0.28)] transition hover:bg-[#E11D60]"
                     >
-                        Về trang đăng ký
+                        {isLoggedIn ? 'Về trang chủ' : 'Về trang đăng ký'}
                     </Link>
                 </div>
 
