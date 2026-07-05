@@ -15,8 +15,14 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest req) {
-        return ApiResponse.success("Đăng ký thành công", authService.register(req));
+    public ApiResponse<Void> register(@Valid @RequestBody RegisterRequest req) {
+        authService.register(req);
+        return ApiResponse.successMessage("Mã OTP xác thực đăng ký đã được gửi vào email");
+    }
+
+    @PostMapping("/register/verify-email")
+    public ApiResponse<AuthResponse> verifyRegisterOtp(@Valid @RequestBody VerifyOtpRequest req) {
+        return ApiResponse.success("Xác thực email thành công", authService.verifyRegisterOtp(req));
     }
 
     @PostMapping("/login")
@@ -24,7 +30,7 @@ public class AuthController {
         return ApiResponse.success("Đăng nhập thành công", authService.login(req));
     }
 
-    // ============ MỚI THÊM ============
+    // ============ QUÊN MẬT KHẨU ============
 
     @PostMapping("/forgot-password/send-code")
     public ApiResponse<Void> sendCode(@Valid @RequestBody ForgotPasswordRequest req) {
