@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../utils/authStorage';
 
+
 import {
     BarChart3,
     Bell,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import axiosInstance from '../api/axiosInstance';
+import AdminEvents from './admin/AdminEvents';
 
 type UserItem = {
     id: number;
@@ -384,23 +386,23 @@ function AdminDashboard() {
 
                         <table className="w-full table-fixed text-left text-[11px]">
                             <thead>
-                            <tr className="border-b border-[#E2E8F0] text-[#334155]">
-                                <th className="w-[80px] pb-2 font-black">Mã đơn</th>
-                                <th className="w-[170px] pb-2 font-black">Sự kiện</th>
-                                <th className="w-[115px] pb-2 font-black">Khách hàng</th>
-                                <th className="w-[42px] pb-2 font-black">Vé</th>
-                                <th className="w-[90px] pb-2 font-black">Tổng tiền</th>
-                                <th className="w-[110px] pb-2 font-black">Trạng thái</th>
-                                <th className="w-[110px] pb-2 font-black">Thời gian</th>
-                            </tr>
+                                <tr className="border-b border-[#E2E8F0] text-[#334155]">
+                                    <th className="w-[80px] pb-2 font-black">Mã đơn</th>
+                                    <th className="w-[170px] pb-2 font-black">Sự kiện</th>
+                                    <th className="w-[115px] pb-2 font-black">Khách hàng</th>
+                                    <th className="w-[42px] pb-2 font-black">Vé</th>
+                                    <th className="w-[90px] pb-2 font-black">Tổng tiền</th>
+                                    <th className="w-[110px] pb-2 font-black">Trạng thái</th>
+                                    <th className="w-[110px] pb-2 font-black">Thời gian</th>
+                                </tr>
                             </thead>
 
                             <tbody>
-                            <tr>
-                                <td colSpan={7}>
-                                    <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
-                                </td>
-                            </tr>
+                                <tr>
+                                    <td colSpan={7}>
+                                        <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -421,22 +423,22 @@ function AdminDashboard() {
 
                         <table className="w-full table-fixed text-left text-[11px]">
                             <thead>
-                            <tr className="border-b border-[#E2E8F0] text-[#334155]">
-                                <th className="w-[190px] pb-2 font-black">Sự kiện</th>
-                                <th className="w-[90px] pb-2 font-black">Thời gian</th>
-                                <th className="w-[130px] pb-2 font-black">Địa điểm</th>
-                                <th className="w-[90px] pb-2 font-black">Vé đã bán</th>
-                                <th className="w-[70px] pb-2 font-black">Tỉ lệ</th>
-                                <th className="w-[88px] pb-2 font-black">Trạng thái</th>
-                            </tr>
+                                <tr className="border-b border-[#E2E8F0] text-[#334155]">
+                                    <th className="w-[190px] pb-2 font-black">Sự kiện</th>
+                                    <th className="w-[90px] pb-2 font-black">Thời gian</th>
+                                    <th className="w-[130px] pb-2 font-black">Địa điểm</th>
+                                    <th className="w-[90px] pb-2 font-black">Vé đã bán</th>
+                                    <th className="w-[70px] pb-2 font-black">Tỉ lệ</th>
+                                    <th className="w-[88px] pb-2 font-black">Trạng thái</th>
+                                </tr>
                             </thead>
 
                             <tbody>
-                            <tr>
-                                <td colSpan={6}>
-                                    <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
-                                </td>
-                            </tr>
+                                <tr>
+                                    <td colSpan={6}>
+                                        <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -514,136 +516,133 @@ function AdminDashboard() {
                 <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white">
                     <table className="w-full table-fixed text-left text-sm">
                         <thead>
-                        <tr className="border-b border-[#E2E8F0] bg-[#FBFCFE] text-xs font-black text-[#0B1736]">
-                            <th className="w-[5%] px-3 py-4">ID</th>
-                            <th className="w-[20%] px-3 py-4">Họ và tên</th>
-                            <th className="w-[25%] px-3 py-4">Email</th>
-                            <th className="w-[13%] px-3 py-4">Số điện thoại</th>
-                            <th className="w-[10%] px-3 py-4">Quyền</th>
-                            <th className="w-[10%] px-3 py-4">Trạng thái</th>
-                            <th className="w-[10%] px-3 py-4">Ngày tạo</th>
-                            <th className="w-[7%] px-3 py-4 text-center">Thao tác</th>
-                        </tr>
+                            <tr className="border-b border-[#E2E8F0] bg-[#FBFCFE] text-xs font-black text-[#0B1736]">
+                                <th className="w-[5%] px-3 py-4">ID</th>
+                                <th className="w-[20%] px-3 py-4">Họ và tên</th>
+                                <th className="w-[25%] px-3 py-4">Email</th>
+                                <th className="w-[13%] px-3 py-4">Số điện thoại</th>
+                                <th className="w-[10%] px-3 py-4">Quyền</th>
+                                <th className="w-[10%] px-3 py-4">Trạng thái</th>
+                                <th className="w-[10%] px-3 py-4">Ngày tạo</th>
+                                <th className="w-[7%] px-3 py-4 text-center">Thao tác</th>
+                            </tr>
                         </thead>
 
                         <tbody>
-                        {loadingUsers && (
-                            <tr>
-                                <td
-                                    colSpan={8}
-                                    className="px-4 py-8 text-center text-sm font-bold text-[#64748B]"
-                                >
-                                    Đang tải danh sách người dùng...
-                                </td>
-                            </tr>
-                        )}
-
-                        {!loadingUsers && filteredUsers.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={8}
-                                    className="px-4 py-8 text-center text-sm font-bold text-[#64748B]"
-                                >
-                                    Không có người dùng phù hợp
-                                </td>
-                            </tr>
-                        )}
-
-                        {!loadingUsers &&
-                            filteredUsers.map((user) => {
-                                const roleLabel = getRoleLabel(user.role);
-                                const isAdminAccount = roleLabel === 'ADMIN';
-
-                                return (
-                                    <tr
-                                        key={user.id}
-                                        className="border-b border-[#E2E8F0] text-xs font-semibold text-[#0B1736] transition last:border-b-0 hover:bg-[#F8FAFC]"
+                            {loadingUsers && (
+                                <tr>
+                                    <td
+                                        colSpan={8}
+                                        className="px-4 py-8 text-center text-sm font-bold text-[#64748B]"
                                     >
-                                        <td className="px-3 py-4">
-                                            {user.id}
-                                        </td>
+                                        Đang tải danh sách người dùng...
+                                    </td>
+                                </tr>
+                            )}
 
-                                        <td className="px-3 py-4">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]">
-                                                    <UserRound size={17} />
-                                                </div>
+                            {!loadingUsers && filteredUsers.length === 0 && (
+                                <tr>
+                                    <td
+                                        colSpan={8}
+                                        className="px-4 py-8 text-center text-sm font-bold text-[#64748B]"
+                                    >
+                                        Không có người dùng phù hợp
+                                    </td>
+                                </tr>
+                            )}
 
-                                                <span className="truncate font-black">
+                            {!loadingUsers &&
+                                filteredUsers.map((user) => {
+                                    const roleLabel = getRoleLabel(user.role);
+                                    const isAdminAccount = roleLabel === 'ADMIN';
+
+                                    return (
+                                        <tr
+                                            key={user.id}
+                                            className="border-b border-[#E2E8F0] text-xs font-semibold text-[#0B1736] transition last:border-b-0 hover:bg-[#F8FAFC]"
+                                        >
+                                            <td className="px-3 py-4">
+                                                {user.id}
+                                            </td>
+
+                                            <td className="px-3 py-4">
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]">
+                                                        <UserRound size={17} />
+                                                    </div>
+
+                                                    <span className="truncate font-black">
                                                         {user.fullName}
                                                     </span>
-                                            </div>
-                                        </td>
+                                                </div>
+                                            </td>
 
-                                        <td className="truncate px-3 py-4 text-[#334155]">
-                                            {user.email}
-                                        </td>
+                                            <td className="truncate px-3 py-4 text-[#334155]">
+                                                {user.email}
+                                            </td>
 
-                                        <td className="truncate px-3 py-4 text-[#334155]">
-                                            {user.phone || 'Chưa có'}
-                                        </td>
+                                            <td className="truncate px-3 py-4 text-[#334155]">
+                                                {user.phone || 'Chưa có'}
+                                            </td>
 
-                                        <td className="px-3 py-4">
+                                            <td className="px-3 py-4">
                                                 <span
-                                                    className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[10px] font-black ${
-                                                        roleLabel === 'ADMIN'
-                                                            ? 'bg-[#F3E8FF] text-[#7C3AED]'
-                                                            : 'bg-[#FCE7F3] text-[#B000FF]'
-                                                    }`}
+                                                    className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[10px] font-black ${roleLabel === 'ADMIN'
+                                                        ? 'bg-[#F3E8FF] text-[#7C3AED]'
+                                                        : 'bg-[#FCE7F3] text-[#B000FF]'
+                                                        }`}
                                                 >
                                                     {roleLabel}
                                                 </span>
-                                        </td>
+                                            </td>
 
-                                        <td className="px-3 py-4">
+                                            <td className="px-3 py-4">
                                                 <span
-                                                    className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[10px] font-black ${
-                                                        user.status === 'ACTIVE'
-                                                            ? 'bg-[#D1FAE5] text-[#059669]'
-                                                            : 'bg-[#FEE2E2] text-[#DC2626]'
-                                                    }`}
+                                                    className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[10px] font-black ${user.status === 'ACTIVE'
+                                                        ? 'bg-[#D1FAE5] text-[#059669]'
+                                                        : 'bg-[#FEE2E2] text-[#DC2626]'
+                                                        }`}
                                                 >
                                                     {user.status}
                                                 </span>
-                                        </td>
+                                            </td>
 
-                                        <td className="truncate px-3 py-4 text-[#334155]">
-                                            {getDateLabel(user.createdAt)}
-                                        </td>
+                                            <td className="truncate px-3 py-4 text-[#334155]">
+                                                {getDateLabel(user.createdAt)}
+                                            </td>
 
-                                        <td className="px-3 py-4">
-                                            <div className="flex items-center justify-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openEditModal(user)}
-                                                    className="flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] bg-white text-[#6D00FF] transition hover:bg-[#F3E8FF]"
-                                                    title="Sửa"
-                                                >
-                                                    <Pencil size={15} strokeWidth={2.4} />
-                                                </button>
+                                            <td className="px-3 py-4">
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openEditModal(user)}
+                                                        className="flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] bg-white text-[#6D00FF] transition hover:bg-[#F3E8FF]"
+                                                        title="Sửa"
+                                                    >
+                                                        <Pencil size={15} strokeWidth={2.4} />
+                                                    </button>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleDeleteUser(user)}
-                                                    disabled={isAdminAccount}
-                                                    className={`flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] transition ${
-                                                        isAdminAccount
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleDeleteUser(user)}
+                                                        disabled={isAdminAccount}
+                                                        className={`flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] transition ${isAdminAccount
                                                             ? 'cursor-not-allowed bg-[#F1F5F9] text-[#94A3B8] opacity-60'
                                                             : 'bg-white text-[#EF321F] hover:bg-[#FEE2E2]'
-                                                    }`}
-                                                    title={
-                                                        isAdminAccount
-                                                            ? 'Không được xóa tài khoản ADMIN'
-                                                            : 'Xóa'
-                                                    }
-                                                >
-                                                    <Trash2 size={15} strokeWidth={2.4} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                                            }`}
+                                                        title={
+                                                            isAdminAccount
+                                                                ? 'Không được xóa tài khoản ADMIN'
+                                                                : 'Xóa'
+                                                        }
+                                                    >
+                                                        <Trash2 size={15} strokeWidth={2.4} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                         </tbody>
                     </table>
                 </div>
@@ -796,11 +795,12 @@ function AdminDashboard() {
         if (activeMenu === 'Tổng quan') {
             return renderOverview();
         }
-
         if (activeMenu === 'Người dùng') {
             return renderUsers();
         }
-
+        if (activeMenu === 'Sự kiện') {
+            return <AdminEvents />;
+        }
         return renderPlaceholder();
     };
 
@@ -850,9 +850,8 @@ function AdminDashboard() {
 
                             <ChevronDown
                                 size={18}
-                                className={`text-white/70 transition ${
-                                    isAdminDropdownOpen ? 'rotate-180' : ''
-                                }`}
+                                className={`text-white/70 transition ${isAdminDropdownOpen ? 'rotate-180' : ''
+                                    }`}
                             />
                         </button>
 
@@ -892,11 +891,10 @@ function AdminDashboard() {
                                 key={label}
                                 type="button"
                                 onClick={() => setActiveMenu(label)}
-                                className={`flex h-[52px] w-full items-center gap-4 rounded-xl px-5 text-sm font-black transition ${
-                                    isActive
-                                        ? 'bg-[#F43F73] text-white shadow-[0_14px_28px_rgba(244,63,115,0.28)]'
-                                        : 'text-[#334155] hover:bg-[#F8FAFC] hover:text-[#F43F73]'
-                                }`}
+                                className={`flex h-[52px] w-full items-center gap-4 rounded-xl px-5 text-sm font-black transition ${isActive
+                                    ? 'bg-[#F43F73] text-white shadow-[0_14px_28px_rgba(244,63,115,0.28)]'
+                                    : 'text-[#334155] hover:bg-[#F8FAFC] hover:text-[#F43F73]'
+                                    }`}
                             >
                                 <Icon size={21} strokeWidth={2.2} />
                                 {label}
