@@ -1,8 +1,6 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
-
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
-
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -12,6 +10,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import EventList from './pages/EventList';
+import EventDetail from './pages/EventDetail';
 
 type ComingSoonPageProps = {
     title: string;
@@ -26,7 +26,6 @@ function ComingSoonPage({ title, description }: ComingSoonPageProps) {
                     <h1 className="text-3xl font-black text-[#0B1736]">
                         {title}
                     </h1>
-
                     <p className="mt-3 text-sm text-[#94A3B8]">
                         {description || 'Nội dung trang này sẽ được thiết kế sau'}
                     </p>
@@ -38,7 +37,6 @@ function ComingSoonPage({ title, description }: ComingSoonPageProps) {
 
 function App() {
     const location = useLocation();
-
     const hideLayoutPages = [
         '/login',
         '/register',
@@ -46,25 +44,19 @@ function App() {
         '/terms',
         '/privacy',
     ];
-
     const isAdminPage = location.pathname.startsWith('/admin');
-
     const shouldHideLayout =
         hideLayoutPages.includes(location.pathname) || isAdminPage;
-
     return (
         <div className="min-h-screen bg-white font-sans">
             {!shouldHideLayout && <Header />}
-
             {shouldHideLayout ? (
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
-
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/privacy" element={<Privacy />} />
-
                     <Route
                         path="/admin"
                         element={
@@ -79,16 +71,15 @@ function App() {
                     <main className="min-h-[520px] bg-white">
                         <Routes>
                             <Route path="/" element={<Home />} />
-
-                            <Route path="/events" element={<ComingSoonPage title="Sự kiện" />} />
-                            <Route path="/concert" element={<ComingSoonPage title="Concert" />} />
-                            <Route path="/sports" element={<ComingSoonPage title="Thể thao" />} />
-                            <Route path="/arts" element={<ComingSoonPage title="Nghệ thuật" />} />
+                            <Route path="/events" element={<EventList />} />
+                            <Route path="/events/:id" element={<EventDetail />} />
+                            <Route path="/concert" element={<Navigate to="/events?category=concert" replace />} />
+                            <Route path="/sports" element={<Navigate to="/events?category=the-thao" replace />} />
+                            <Route path="/arts" element={<Navigate to="/events?category=nghe-thuat" replace />} />
                             <Route path="/experiences" element={<ComingSoonPage title="Trải nghiệm" />} />
                             <Route path="/venues" element={<ComingSoonPage title="Địa điểm" />} />
                             <Route path="/news" element={<ComingSoonPage title="Tin tức" />} />
                             <Route path="/promotions" element={<ComingSoonPage title="Ưu đãi" />} />
-
                             <Route
                                 path="/my-tickets"
                                 element={
@@ -98,7 +89,6 @@ function App() {
                                     />
                                 }
                             />
-
                             <Route
                                 path="/favorites"
                                 element={
@@ -108,7 +98,6 @@ function App() {
                                     />
                                 }
                             />
-
                             <Route
                                 path="/profile"
                                 element={
@@ -119,7 +108,6 @@ function App() {
                             />
                         </Routes>
                     </main>
-
                     <Footer />
                 </>
             )}

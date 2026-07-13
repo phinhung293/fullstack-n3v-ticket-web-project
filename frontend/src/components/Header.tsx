@@ -24,18 +24,6 @@ const menuItems = [
         path: '/events',
     },
     {
-        label: 'Concert',
-        path: '/concert',
-    },
-    {
-        label: 'Thể thao',
-        path: '/sports',
-    },
-    {
-        label: 'Nghệ thuật',
-        path: '/arts',
-    },
-    {
         label: 'Trải nghiệm',
         path: '/experiences',
     },
@@ -54,8 +42,7 @@ const menuItems = [
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `relative flex h-full shrink-0 items-center text-sm font-bold transition ${
-        isActive ? 'text-[#F43F73]' : 'text-white hover:text-[#F43F73]'
+    `relative flex h-full shrink-0 items-center text-sm font-bold transition ${isActive ? 'text-[#F43F73]' : 'text-white hover:text-[#F43F73]'
     }`;
 
 function Header() {
@@ -144,10 +131,9 @@ function Header() {
                             <NavLink
                                 to="/login"
                                 className={({ isActive }) =>
-                                    `flex h-11 min-w-[110px] items-center justify-center rounded-xl border px-5 text-sm font-bold transition ${
-                                        isActive
-                                            ? 'border-[#F43F73] bg-[#F43F73] text-white'
-                                            : 'border-white/25 bg-transparent text-white hover:border-[#F43F73] hover:bg-[#F43F73]'
+                                    `flex h-11 min-w-[110px] items-center justify-center rounded-xl border px-5 text-sm font-bold transition ${isActive
+                                        ? 'border-[#F43F73] bg-[#F43F73] text-white'
+                                        : 'border-white/25 bg-transparent text-white hover:border-[#F43F73] hover:bg-[#F43F73]'
                                     }`
                                 }
                             >
@@ -157,10 +143,9 @@ function Header() {
                             <NavLink
                                 to="/register"
                                 className={({ isActive }) =>
-                                    `flex h-11 min-w-[110px] items-center justify-center rounded-xl border px-5 text-sm font-bold transition ${
-                                        isActive
-                                            ? 'border-[#F43F73] bg-[#F43F73] text-white'
-                                            : 'border-white/25 bg-transparent text-white hover:border-[#F43F73] hover:bg-[#F43F73]'
+                                    `flex h-11 min-w-[110px] items-center justify-center rounded-xl border px-5 text-sm font-bold transition ${isActive
+                                        ? 'border-[#F43F73] bg-[#F43F73] text-white'
+                                        : 'border-white/25 bg-transparent text-white hover:border-[#F43F73] hover:bg-[#F43F73]'
                                     }`
                                 }
                             >
@@ -174,8 +159,7 @@ function Header() {
                             <NavLink
                                 to="/my-tickets"
                                 className={({ isActive }) =>
-                                    `flex items-center gap-1.5 text-xs font-bold transition ${
-                                        isActive ? 'text-[#F43F73]' : 'text-white hover:text-[#F43F73]'
+                                    `flex items-center gap-1.5 text-xs font-bold transition ${isActive ? 'text-[#F43F73]' : 'text-white hover:text-[#F43F73]'
                                     }`
                                 }
                             >
@@ -186,8 +170,7 @@ function Header() {
                             <NavLink
                                 to="/favorites"
                                 className={({ isActive }) =>
-                                    `flex items-center gap-1.5 text-xs font-bold transition ${
-                                        isActive ? 'text-[#F43F73]' : 'text-white hover:text-[#F43F73]'
+                                    `flex items-center gap-1.5 text-xs font-bold transition ${isActive ? 'text-[#F43F73]' : 'text-white hover:text-[#F43F73]'
                                     }`
                                 }
                             >
@@ -231,9 +214,8 @@ function Header() {
 
                                     <ChevronDown
                                         size={14}
-                                        className={`text-white/70 transition ${
-                                            isUserMenuOpen ? 'rotate-180' : ''
-                                        }`}
+                                        className={`text-white/70 transition ${isUserMenuOpen ? 'rotate-180' : ''
+                                            }`}
                                     />
                                 </button>
 
@@ -267,8 +249,7 @@ function Header() {
                             <NavLink
                                 to="/admin"
                                 className={({ isActive }) =>
-                                    `rounded-xl px-5 py-3 text-sm font-black text-white transition ${
-                                        isActive ? 'bg-[#E11D60]' : 'bg-[#F43F73] hover:bg-[#E11D60]'
+                                    `rounded-xl px-5 py-3 text-sm font-black text-white transition ${isActive ? 'bg-[#E11D60]' : 'bg-[#F43F73] hover:bg-[#E11D60]'
                                     }`
                                 }
                             >
@@ -297,9 +278,8 @@ function Header() {
 
                                     <ChevronDown
                                         size={14}
-                                        className={`text-white/70 transition ${
-                                            isUserMenuOpen ? 'rotate-180' : ''
-                                        }`}
+                                        className={`text-white/70 transition ${isUserMenuOpen ? 'rotate-180' : ''
+                                            }`}
                                     />
                                 </button>
 
