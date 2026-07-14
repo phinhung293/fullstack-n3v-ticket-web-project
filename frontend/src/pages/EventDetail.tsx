@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarDays, MapPin, MousePointerClick, Ticket } from 'luci
 import SeatMap from '../components/events/SeatMap';
 import ZoneQuantitySelector from '../components/events/ZoneQuantitySelector';
 import { getEventApiErrorMessage, getPublicEventById, getPublicZoneSeats } from '../api/eventApi';
+import { createCheckout } from '../api/bookingApi';
 import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
 import {
     canPurchase,
@@ -21,6 +22,7 @@ function EventDetail() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showPicker, setShowPicker] = useState(false);
+    const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
     // zoneId -> danh sách ghế/bàn của zone đó (SEAT_MAP / TEA_LOUNGE)
     const [seatsByZone, setSeatsByZone] = useState<Record<number, EventSeatResponse[]>>({});
@@ -87,20 +89,55 @@ function EventDetail() {
     // Tất cả ghế/bàn (SEAT_MAP hoặc TEA_LOUNGE) của các zone đã tải, gộp lại cho SeatMap.
     const allSeats = activeZones.flatMap((z) => seatsByZone[z.id] || []);
 
-    const handleBuySeats = (selectedSeats: EventSeatResponse[], total: number) => {
-        // TODO: điểm tích hợp với Cart / Checkout thật (module Đặt vé & thanh toán) - hiện
-        // tại chỉ demo bằng alert, KHÔNG đụng vào logic Cart/Thanh toán hiện có của dự án.
-        const seatList = selectedSeats.map((seat) => seat.seatCode).join(', ');
-        alert(`Đã chọn ${selectedSeats.length} ghế (${seatList})\nTổng tiền: ${formatCurrency(total)}`);
+    const handleBuySeats = async (selectedSeats: EventSeatResponse[], total: number) => {
+        setIsCreatingOrder(true);
+        try {
+            const payload = {
+                seatIds: selectedSeats.map((s) => s.id),
+                zones: []
+            };
+            const response = await createCheckout(payload);
+            navigate('/checkout', {
+                state: {
+                    event,
+                    selectedSeats,
+                    total,
+                    orderCode: response.orderCode,
+                    checkoutUrl: response.checkoutUrl
+                }
+            });
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng');
+        } finally {
+            setIsCreatingOrder(false);
+        }
     };
 
-    const handleBuyZones = (
+    const handleBuyZones = async (
         selections: { zone: EventZoneResponse; quantity: number }[],
         total: number,
     ) => {
-        // TODO: điểm tích hợp với Cart / Checkout thật (module Đặt vé & thanh toán).
-        const summary = selections.map((s) => `${s.zone.zoneName} x${s.quantity}`).join(', ');
-        alert(`Đã chọn: ${summary}\nTổng tiền: ${formatCurrency(total)}`);
+        setIsCreatingOrder(true);
+        try {
+            const payload = {
+                seatIds: [],
+                zones: selections.map((s) => ({ zoneId: s.zone.id, quantity: s.quantity }))
+            };
+            const response = await createCheckout(payload);
+            navigate('/checkout', {
+                state: {
+                    event,
+                    selectedZones: selections,
+                    total,
+                    orderCode: response.orderCode,
+                    checkoutUrl: response.checkoutUrl
+                }
+            });
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng');
+        } finally {
+            setIsCreatingOrder(false);
+        }
     };
 
     const pickerLabel = event.ticketMapType === 'ZONE' ? 'Chọn vé' : 'Chọn vị trí';
@@ -220,6 +257,16 @@ function EventDetail() {
                     )}
                 </aside>
             </section>
+
+            {/* Loading Overlay */}
+            {isCreatingOrder && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#F43F73] border-t-transparent"></div>
+                        <p className="font-bold text-[#0B1736]">Đang tạo đơn hàng, vui lòng đợi...</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

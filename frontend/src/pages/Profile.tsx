@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { getAuthUser } from '../utils/authStorage';
 import axiosInstance from '../api/axiosInstance';
+import OrderHistory from '../components/profile/OrderHistory';
 
 type ProfileUser = {
     id?: number;
@@ -178,7 +179,7 @@ function Profile() {
         }`;
 
     const contentCardClass =
-        'h-[500px] rounded-2xl border border-[#F43F73]/50 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)]';
+        'min-h-[500px] h-fit rounded-2xl border border-[#F43F73]/50 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)]';
 
     const profileInputClass =
         'h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm font-semibold text-[#0B1736] outline-none transition placeholder:text-[#94A3B8] focus:border-[#F43F73] focus:ring-4 focus:ring-[#F43F73]/10';
@@ -744,16 +745,8 @@ function Profile() {
                         )}
 
                         {activeTab === 'history' && (
-                            <div className="flex h-full items-center justify-center">
-                                <div className="text-center">
-                                    <h1 className="text-3xl font-black text-[#0B1736]">
-                                        Lịch sử đặt vé
-                                    </h1>
-
-                                    <p className="mt-3 text-sm font-medium text-[#94A3B8]">
-                                        Nội dung lịch sử đặt vé sẽ được thiết kế sau.
-                                    </p>
-                                </div>
+                            <div className="h-full">
+                                <OrderHistory />
                             </div>
                         )}
 

@@ -12,6 +12,9 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import EventList from './pages/EventList';
 import EventDetail from './pages/EventDetail';
+import Checkout from './pages/Checkout';
+import BookingStatus from './pages/BookingStatus';
+import MyTickets from './pages/MyTickets';
 
 type ComingSoonPageProps = {
     title: string;
@@ -73,6 +76,8 @@ function App() {
                             <Route path="/" element={<Home />} />
                             <Route path="/events" element={<EventList />} />
                             <Route path="/events/:id" element={<EventDetail />} />
+                            <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                            <Route path="/booking-status/:orderCode" element={<BookingStatus />} />
                             <Route path="/concert" element={<Navigate to="/events?category=concert" replace />} />
                             <Route path="/sports" element={<Navigate to="/events?category=the-thao" replace />} />
                             <Route path="/arts" element={<Navigate to="/events?category=nghe-thuat" replace />} />
@@ -80,15 +85,7 @@ function App() {
                             <Route path="/venues" element={<ComingSoonPage title="Địa điểm" />} />
                             <Route path="/news" element={<ComingSoonPage title="Tin tức" />} />
                             <Route path="/promotions" element={<ComingSoonPage title="Ưu đãi" />} />
-                            <Route
-                                path="/my-tickets"
-                                element={
-                                    <ComingSoonPage
-                                        title="Vé của tôi"
-                                        description="Danh sách vé của bạn sẽ được thiết kế sau"
-                                    />
-                                }
-                            />
+                            <Route path="/my-tickets" element={<ProtectedRoute><MyTickets /></ProtectedRoute>} />
                             <Route
                                 path="/favorites"
                                 element={
