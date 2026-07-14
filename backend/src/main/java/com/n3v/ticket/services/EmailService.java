@@ -24,12 +24,15 @@ import org.springframework.core.io.ByteArrayResource;
 
 import java.io.ByteArrayOutputStream;
 
+import com.n3v.ticket.repositories.EventZoneRepository;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
     private final JavaMailSender mailSender;
+    private final EventZoneRepository eventZoneRepository;
 
     @Value("${spring.mail.username:}")
     private String mailUsername;
@@ -99,7 +102,18 @@ public class EmailService {
         if (!StringUtils.hasText(mailUsername)) return;
         
         try {
-            String eventName = order.getOrderItems().isEmpty() ? "Sự kiện N3V" : order.getOrderItems().get(0).getSeat().getEventZone().getEvent().getName();
+            String eventName = "Sự kiện N3V";
+            if (!order.getOrderItems().isEmpty()) {
+                var firstItem = order.getOrderItems().get(0);
+                if (firstItem.getSeat() != null) {
+                    eventName = firstItem.getSeat().getEventZone().getEvent().getName();
+                } else if (firstItem.getEventZone() != null) {
+                    var zone = firstItem.getEventZone();
+                    if (zone != null) {
+                        eventName = zone.getEvent().getName();
+                    }
+                }
+            }
             
             QRCodeWriter qrCodeWriter = new QRCodeWriter();
             BitMatrix bitMatrix = qrCodeWriter.encode(order.getOrderCode(), BarcodeFormat.QR_CODE, 200, 200);

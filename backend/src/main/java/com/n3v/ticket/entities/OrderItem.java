@@ -26,7 +26,11 @@ public class OrderItem {
     private Long ticketClassId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "seat_id", nullable = false)
+    @JoinColumn(name = "event_zone_id")
+    private EventZone eventZone;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "seat_id", nullable = true)
     private EventSeat seat;
 
     @Column(nullable = false)

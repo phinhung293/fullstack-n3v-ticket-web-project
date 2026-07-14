@@ -98,13 +98,16 @@ function EventDetail() {
     };
 
     const handleBuyZones = (
-        _selections: { zone: EventZoneResponse; quantity: number }[],
-        _total: number,
+        selections: { zone: EventZoneResponse; quantity: number }[],
+        total: number,
     ) => {
-        // We do not have seat selection for zones yet in the backend order flow.
-        // The backend expects seatIds. If mapType is ZONE, we need seatIds.
-        // But for now, we just pass what we have, though backend might fail if it strictly needs seat IDs.
-        alert("Tính năng mua vé theo khu vực (không chọn ghế) đang được phát triển.");
+        navigate('/checkout', {
+            state: {
+                event,
+                selectedZones: selections,
+                total
+            }
+        });
     };
 
     const pickerLabel = event.ticketMapType === 'ZONE' ? 'Chọn vé' : 'Chọn vị trí';

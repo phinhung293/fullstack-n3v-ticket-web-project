@@ -6,9 +6,17 @@ import com.n3v.ticket.entities.OrderItem;
 import com.n3v.ticket.entities.User;
 import com.n3v.ticket.enums.OrderStatus;
 import com.n3v.ticket.enums.SeatStatus;
+import com.n3v.ticket.repositories.EventZoneRepository;
 import com.n3v.ticket.repositories.EventSeatRepository;
 import com.n3v.ticket.repositories.OrderItemRepository;
 import com.n3v.ticket.repositories.OrderRepository;
+import com.n3v.ticket.repositories.PaymentRepository;
+import com.n3v.ticket.dto.CheckoutRequest;
+import com.n3v.ticket.dto.OrderResponse;
+import com.n3v.ticket.entities.EventZone;
+import com.n3v.ticket.entities.Payment;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,63 +36,95 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final EventSeatRepository eventSeatRepository;
+    private final EventZoneRepository eventZoneRepository;
+    private final PaymentRepository paymentRepository;
 
     @Transactional
-    public Order createOrder(User user, List<Long> seatIds) {
-        if (seatIds == null || seatIds.isEmpty()) {
-            throw new RuntimeException("Danh sách ghế không hợp lệ");
+    public Order createOrder(User user, CheckoutRequest request) {
+        if ((request.getSeatIds() == null || request.getSeatIds().isEmpty()) && 
+            (request.getZones() == null || request.getZones().isEmpty())) {
+            throw new RuntimeException("Giỏ hàng rỗng");
         }
 
-        // Lock seats
-        List<EventSeat> lockedSeats = new ArrayList<>();
         java.math.BigDecimal totalAmount = java.math.BigDecimal.ZERO;
-
-        for (Long seatId : seatIds) {
-            // Pessimistic lock
-            EventSeat seat = eventSeatRepository.findByIdWithPessimisticLock(seatId)
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy ghế ID: " + seatId));
-
-            if (seat.getStatus() != SeatStatus.AVAILABLE) {
-                throw new RuntimeException("Ghế " + seat.getSeatCode() + " đã được đặt hoặc đang giữ chỗ.");
-            }
-
-            // Lock the seat
-            seat.setStatus(SeatStatus.LOCKED);
-            eventSeatRepository.save(seat);
-            lockedSeats.add(seat);
-
-            java.math.BigDecimal seatPrice = seat.getPrice() != null ? seat.getPrice() : seat.getEventZone().getPrice();
-            totalAmount = totalAmount.add(seatPrice);
-        }
-
-        // Divide by 1000 for test integration
-        totalAmount = totalAmount.divide(new java.math.BigDecimal("1000"));
+        List<OrderItem> itemsToSave = new ArrayList<>();
 
         Order order = Order.builder()
                 .orderCode(String.valueOf(System.currentTimeMillis() % 9000000000L))
                 .user(user)
-                .totalAmount(totalAmount)
-                .discountAmount(java.math.BigDecimal.ZERO)
-                .finalAmount(totalAmount)
                 .status(OrderStatus.PENDING)
                 .build();
-
+        
+        // Cần lưu order trước để có reference trong OrderItem
+        // Tạm set số tiền bằng 0 để save
+        order.setTotalAmount(java.math.BigDecimal.ZERO);
+        order.setFinalAmount(java.math.BigDecimal.ZERO);
         order = orderRepository.save(order);
 
-        for (EventSeat seat : lockedSeats) {
-            java.math.BigDecimal seatPrice = seat.getPrice() != null ? seat.getPrice() : seat.getEventZone().getPrice();
-            java.math.BigDecimal priceForDb = seatPrice.divide(new java.math.BigDecimal("1000"));
-            OrderItem item = OrderItem.builder()
-                    .order(order)
-                    .seat(seat)
-                    .unitPrice(priceForDb)
-                    .quantity(1)
-                    .subtotal(priceForDb)
-                    .build();
-            orderItemRepository.save(item);
+        // 1. Xử lý ghế (seat map)
+        if (request.getSeatIds() != null && !request.getSeatIds().isEmpty()) {
+            for (Long seatId : request.getSeatIds()) {
+                EventSeat seat = eventSeatRepository.findByIdWithPessimisticLock(seatId)
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy ghế ID: " + seatId));
+
+                if (seat.getStatus() != SeatStatus.AVAILABLE) {
+                    throw new RuntimeException("Ghế " + seat.getSeatCode() + " đã được đặt hoặc đang giữ chỗ.");
+                }
+
+                seat.setStatus(SeatStatus.LOCKED);
+                eventSeatRepository.save(seat);
+
+                java.math.BigDecimal seatPrice = seat.getPrice() != null ? seat.getPrice() : seat.getEventZone().getPrice();
+                
+                totalAmount = totalAmount.add(seatPrice);
+                
+                OrderItem item = OrderItem.builder()
+                        .order(order)
+                        .seat(seat)
+                        .unitPrice(seatPrice)
+                        .quantity(1)
+                        .subtotal(seatPrice)
+                        .build();
+                itemsToSave.add(item);
+            }
         }
 
-        return order;
+        // 2. Xử lý zone (không chọn ghế)
+        if (request.getZones() != null && !request.getZones().isEmpty()) {
+            for (CheckoutRequest.ZoneSelection selection : request.getZones()) {
+                EventZone zone = eventZoneRepository.findById(selection.getZoneId())
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+                
+                // Kiểm tra số lượng
+                if (zone.getTotalCapacity() != null && (zone.getSoldCount() + selection.getQuantity() > zone.getTotalCapacity())) {
+                    throw new RuntimeException("Khu vực " + zone.getZoneName() + " không đủ vé.");
+                }
+                
+                // Không lock cứng ở đây, chỉ dựa vào db transaction
+                
+                java.math.BigDecimal subtotal = zone.getPrice().multiply(new java.math.BigDecimal(selection.getQuantity()));
+                totalAmount = totalAmount.add(subtotal);
+
+                OrderItem item = OrderItem.builder()
+                        .order(order)
+                        .eventZone(zone)
+                        .unitPrice(zone.getPrice())
+                        .quantity(selection.getQuantity())
+                        .subtotal(subtotal)
+                        .build();
+                itemsToSave.add(item);
+            }
+        }
+
+        if (order.getOrderItems() == null) {
+            order.setOrderItems(new ArrayList<>());
+        }
+        order.getOrderItems().clear();
+        order.getOrderItems().addAll(itemsToSave);
+        orderItemRepository.saveAll(itemsToSave);
+        order.setTotalAmount(totalAmount);
+        order.setFinalAmount(totalAmount);
+        return orderRepository.save(order);
     }
 
     @Transactional
@@ -99,9 +139,17 @@ public class OrderService {
 
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
         for (OrderItem item : items) {
-            EventSeat seat = item.getSeat();
-            seat.setStatus(SeatStatus.SOLD);
-            eventSeatRepository.save(seat);
+            if (item.getSeat() != null) {
+                EventSeat seat = item.getSeat();
+                seat.setStatus(SeatStatus.SOLD);
+                eventSeatRepository.save(seat);
+            } else if (item.getTicketClassId() != null) {
+                EventZone zone = eventZoneRepository.findById(item.getTicketClassId()).orElse(null);
+                if (zone != null) {
+                    zone.setSoldCount(zone.getSoldCount() + item.getQuantity());
+                    eventZoneRepository.save(zone);
+                }
+            }
         }
     }
 
@@ -117,9 +165,12 @@ public class OrderService {
 
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
         for (OrderItem item : items) {
-            EventSeat seat = item.getSeat();
-            seat.setStatus(SeatStatus.AVAILABLE);
-            eventSeatRepository.save(seat);
+            if (item.getSeat() != null) {
+                EventSeat seat = item.getSeat();
+                seat.setStatus(SeatStatus.AVAILABLE);
+                eventSeatRepository.save(seat);
+            }
+            // Không làm gì với zone vì lúc tạo order chưa tăng soldCount
         }
     }
 
@@ -134,5 +185,76 @@ public class OrderService {
             log.info("Hủy đơn hàng hết hạn: {}", order.getOrderCode());
             markOrderFailed(order.getOrderCode());
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersByUser(User user) {
+        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        List<OrderResponse> responses = new ArrayList<>();
+        ObjectMapper mapper = new ObjectMapper();
+
+        for (Order order : orders) {
+            String eventName = "Sự kiện N3V";
+            String ticketDetails = "";
+            int totalTickets = 0;
+
+            if (!order.getOrderItems().isEmpty()) {
+                OrderItem firstItem = order.getOrderItems().get(0);
+                if (firstItem.getSeat() != null) {
+                    eventName = firstItem.getSeat().getEventZone().getEvent().getName();
+                    List<String> seats = new ArrayList<>();
+                    for (OrderItem item : order.getOrderItems()) {
+                        if (item.getSeat() != null) {
+                            seats.add(item.getSeat().getSeatCode());
+                            totalTickets += item.getQuantity();
+                        }
+                    }
+                    ticketDetails = "Ghế: " + String.join(", ", seats);
+                } else if (firstItem.getEventZone() != null) {
+                    EventZone zone = firstItem.getEventZone();
+                    if (zone != null) {
+                        eventName = zone.getEvent().getName();
+                    }
+                    List<String> zones = new ArrayList<>();
+                    for (OrderItem item : order.getOrderItems()) {
+                        if (item.getEventZone() != null) {
+                            EventZone z = item.getEventZone();
+                            if (z != null) {
+                                zones.add(z.getZoneName() + " (x" + item.getQuantity() + ")");
+                            }
+                            totalTickets += item.getQuantity();
+                        }
+                    }
+                    ticketDetails = "Khu vực: " + String.join(", ", zones);
+                }
+            }
+
+            String checkoutUrl = null;
+            if (order.getStatus() == OrderStatus.PENDING) {
+                Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+                if (payment != null && payment.getResponseData() != null) {
+                    try {
+                        JsonNode node = mapper.readTree(payment.getResponseData());
+                        if (node.has("checkoutUrl")) {
+                            checkoutUrl = node.get("checkoutUrl").asText();
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to parse payment response data", e);
+                    }
+                }
+            }
+
+            OrderResponse response = OrderResponse.builder()
+                    .orderCode(order.getOrderCode())
+                    .status(order.getStatus().name())
+                    .totalAmount(order.getFinalAmount())
+                    .eventName(eventName)
+                    .ticketDetails(ticketDetails)
+                    .checkoutUrl(checkoutUrl)
+                    .createdAt(order.getCreatedAt())
+                    .build();
+            responses.add(response);
+        }
+        return responses;
     }
 }

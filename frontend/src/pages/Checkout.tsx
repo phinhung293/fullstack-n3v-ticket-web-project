@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Clock, ShieldCheck, Ticket, CreditCard, AlertCircle } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '../utils/format';
-import type { EventResponse, EventSeatResponse } from '../types/event';
+import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
 import { createCheckout } from '../api/bookingApi';
 
 function Checkout() {
@@ -11,6 +11,7 @@ function Checkout() {
     const state = location.state as {
         event?: EventResponse;
         selectedSeats?: EventSeatResponse[];
+        selectedZones?: { zone: EventZoneResponse; quantity: number }[];
         total?: number;
     };
 
@@ -19,7 +20,7 @@ function Checkout() {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        if (!state?.event || !state?.selectedSeats?.length) {
+        if (!state?.event || (!state?.selectedSeats?.length && !state?.selectedZones?.length)) {
             navigate('/');
             return;
         }
@@ -39,17 +40,22 @@ function Checkout() {
         return () => clearInterval(timer);
     }, [navigate, state]);
 
-    if (!state?.event || !state?.selectedSeats?.length) return null;
+    if (!state?.event || (!state?.selectedSeats?.length && !state?.selectedZones?.length)) return null;
 
-    const { event, selectedSeats, total } = state;
-    const seatList = selectedSeats.map((seat) => seat.seatCode).join(', ');
+    const { event, selectedSeats, selectedZones, total } = state;
+    const seatList = selectedSeats ? selectedSeats.map((seat) => seat.seatCode).join(', ') : '';
+    const zoneList = selectedZones ? selectedZones.map((z) => `${z.zone.zoneName} (x${z.quantity})`).join(', ') : '';
+    const totalTickets = (selectedSeats?.length || 0) + (selectedZones?.reduce((acc, curr) => acc + curr.quantity, 0) || 0);
 
     const handlePayment = async () => {
         setLoading(true);
         setError('');
         try {
-            const seatIds = selectedSeats.map(s => s.id);
-            const response = await createCheckout(seatIds);
+            const payload = {
+                seatIds: selectedSeats ? selectedSeats.map(s => s.id) : [],
+                zones: selectedZones ? selectedZones.map(z => ({ zoneId: z.zone.id, quantity: z.quantity })) : []
+            };
+            const response = await createCheckout(payload);
             window.location.href = response.checkoutUrl;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng');
@@ -105,7 +111,7 @@ function Checkout() {
                                         <span className="font-bold text-[#0B1736]">Địa điểm:</span> {event.venueName}
                                     </p>
                                     <p className="mt-1 text-sm font-medium text-[#475569]">
-                                        <span className="font-bold text-[#0B1736]">Vị trí ghế:</span> {seatList}
+                                        <span className="font-bold text-[#0B1736]">{seatList ? 'Vị trí ghế:' : 'Khu vực:'}</span> {seatList || zoneList}
                                     </p>
                                 </div>
                             </div>
@@ -139,7 +145,7 @@ function Checkout() {
                         
                         <div className="mt-6 flex justify-between text-sm font-medium text-[#475569]">
                             <span>Số lượng vé</span>
-                            <span className="font-bold text-[#0B1736]">{selectedSeats.length} vé</span>
+                            <span className="font-bold text-[#0B1736]">{totalTickets} vé</span>
                         </div>
                         <div className="mt-3 flex justify-between text-sm font-medium text-[#475569]">
                             <span>Tạm tính</span>

@@ -14,6 +14,7 @@ import EventList from './pages/EventList';
 import EventDetail from './pages/EventDetail';
 import Checkout from './pages/Checkout';
 import BookingStatus from './pages/BookingStatus';
+import MyTickets from './pages/MyTickets';
 
 type ComingSoonPageProps = {
     title: string;
@@ -84,15 +85,7 @@ function App() {
                             <Route path="/venues" element={<ComingSoonPage title="Địa điểm" />} />
                             <Route path="/news" element={<ComingSoonPage title="Tin tức" />} />
                             <Route path="/promotions" element={<ComingSoonPage title="Ưu đãi" />} />
-                            <Route
-                                path="/my-tickets"
-                                element={
-                                    <ComingSoonPage
-                                        title="Vé của tôi"
-                                        description="Danh sách vé của bạn sẽ được thiết kế sau"
-                                    />
-                                }
-                            />
+                            <Route path="/my-tickets" element={<ProtectedRoute><MyTickets /></ProtectedRoute>} />
                             <Route
                                 path="/favorites"
                                 element={
