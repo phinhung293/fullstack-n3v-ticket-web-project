@@ -27,6 +27,7 @@ import {
 
 import axiosInstance from '../api/axiosInstance';
 import AdminEvents from './admin/AdminEvents';
+import AdminOrders from './admin/AdminOrders';
 
 type UserItem = {
     id: number;
@@ -800,6 +801,9 @@ function AdminDashboard() {
         }
         if (activeMenu === 'Sự kiện') {
             return <AdminEvents />;
+        }
+        if (activeMenu === 'Đơn vé') {
+            return <AdminOrders />;
         }
         return renderPlaceholder();
     };

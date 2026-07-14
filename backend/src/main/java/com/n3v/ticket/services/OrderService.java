@@ -194,71 +194,78 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByUser(User user) {
         List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
-        List<OrderResponse> responses = new ArrayList<>();
+        return orders.stream().map(this::mapToOrderResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getAllOrdersForAdmin() {
+        List<Order> orders = orderRepository.findAllByOrderByCreatedAtDesc();
+        return orders.stream().map(this::mapToOrderResponse).toList();
+    }
+
+    private OrderResponse mapToOrderResponse(Order order) {
         ObjectMapper mapper = new ObjectMapper();
+        String eventName = "Sự kiện N3V";
+        String ticketDetails = "";
+        int totalTickets = 0;
 
-        for (Order order : orders) {
-            String eventName = "Sự kiện N3V";
-            String ticketDetails = "";
-            int totalTickets = 0;
-
-            if (!order.getOrderItems().isEmpty()) {
-                OrderItem firstItem = order.getOrderItems().get(0);
-                if (firstItem.getSeat() != null) {
-                    eventName = firstItem.getSeat().getEventZone().getEvent().getName();
-                    List<String> seats = new ArrayList<>();
-                    for (OrderItem item : order.getOrderItems()) {
-                        if (item.getSeat() != null) {
-                            seats.add(item.getSeat().getSeatCode());
-                            totalTickets += item.getQuantity();
-                        }
-                    }
-                    ticketDetails = "Ghế: " + String.join(", ", seats);
-                } else if (firstItem.getEventZone() != null) {
-                    EventZone zone = firstItem.getEventZone();
-                    if (zone != null) {
-                        eventName = zone.getEvent().getName();
-                    }
-                    List<String> zones = new ArrayList<>();
-                    for (OrderItem item : order.getOrderItems()) {
-                        if (item.getEventZone() != null) {
-                            EventZone z = item.getEventZone();
-                            if (z != null) {
-                                zones.add(z.getZoneName() + " (x" + item.getQuantity() + ")");
-                            }
-                            totalTickets += item.getQuantity();
-                        }
-                    }
-                    ticketDetails = "Khu vực: " + String.join(", ", zones);
-                }
-            }
-
-            String checkoutUrl = null;
-            if (order.getStatus() == OrderStatus.PENDING) {
-                Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
-                if (payment != null && payment.getResponseData() != null) {
-                    try {
-                        JsonNode node = mapper.readTree(payment.getResponseData());
-                        if (node.has("checkoutUrl")) {
-                            checkoutUrl = node.get("checkoutUrl").asText();
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to parse payment response data", e);
+        if (!order.getOrderItems().isEmpty()) {
+            OrderItem firstItem = order.getOrderItems().get(0);
+            if (firstItem.getSeat() != null) {
+                eventName = firstItem.getSeat().getEventZone().getEvent().getName();
+                List<String> seats = new ArrayList<>();
+                for (OrderItem item : order.getOrderItems()) {
+                    if (item.getSeat() != null) {
+                        seats.add(item.getSeat().getSeatCode());
+                        totalTickets += item.getQuantity();
                     }
                 }
+                ticketDetails = "Ghế: " + String.join(", ", seats);
+            } else if (firstItem.getEventZone() != null) {
+                EventZone zone = firstItem.getEventZone();
+                if (zone != null) {
+                    eventName = zone.getEvent().getName();
+                }
+                List<String> zones = new ArrayList<>();
+                for (OrderItem item : order.getOrderItems()) {
+                    if (item.getEventZone() != null) {
+                        EventZone z = item.getEventZone();
+                        if (z != null) {
+                            zones.add(z.getZoneName() + " (x" + item.getQuantity() + ")");
+                        }
+                        totalTickets += item.getQuantity();
+                    }
+                }
+                ticketDetails = "Khu vực: " + String.join(", ", zones);
             }
-
-            OrderResponse response = OrderResponse.builder()
-                    .orderCode(order.getOrderCode())
-                    .status(order.getStatus().name())
-                    .totalAmount(order.getFinalAmount())
-                    .eventName(eventName)
-                    .ticketDetails(ticketDetails)
-                    .checkoutUrl(checkoutUrl)
-                    .createdAt(order.getCreatedAt())
-                    .build();
-            responses.add(response);
         }
-        return responses;
+
+        String checkoutUrl = null;
+        if (order.getStatus() == OrderStatus.PENDING) {
+            Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+            if (payment != null && payment.getResponseData() != null) {
+                try {
+                    JsonNode node = mapper.readTree(payment.getResponseData());
+                    if (node.has("checkoutUrl")) {
+                        checkoutUrl = node.get("checkoutUrl").asText();
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse payment response data", e);
+                }
+            }
+        }
+
+        return OrderResponse.builder()
+                .orderCode(order.getOrderCode())
+                .status(order.getStatus().name())
+                .totalAmount(order.getFinalAmount())
+                .eventName(eventName)
+                .ticketDetails(ticketDetails)
+                .checkoutUrl(checkoutUrl)
+                .createdAt(order.getCreatedAt())
+                .customerName(order.getUser() != null ? order.getUser().getFullName() : null)
+                .customerEmail(order.getUser() != null ? order.getUser().getEmail() : null)
+                .customerPhone(order.getUser() != null ? order.getUser().getPhone() : null)
+                .build();
     }
 }

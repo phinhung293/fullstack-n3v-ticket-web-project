@@ -15,4 +15,9 @@ public class OrderResponse {
     private String ticketDetails;
     private String checkoutUrl;
     private LocalDateTime createdAt;
+    
+    // Admin fields
+    private String customerName;
+    private String customerEmail;
+    private String customerPhone;
 }
