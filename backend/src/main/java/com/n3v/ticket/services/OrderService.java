@@ -100,7 +100,9 @@ public class OrderService {
                     throw new RuntimeException("Khu vực " + zone.getZoneName() + " không đủ vé.");
                 }
                 
-                // Không lock cứng ở đây, chỉ dựa vào db transaction
+                // Giữ chỗ (lock) bằng cách tăng soldCount ngay lúc tạo đơn
+                zone.setSoldCount(zone.getSoldCount() + selection.getQuantity());
+                eventZoneRepository.save(zone);
                 
                 java.math.BigDecimal subtotal = zone.getPrice().multiply(new java.math.BigDecimal(selection.getQuantity()));
                 totalAmount = totalAmount.add(subtotal);
@@ -143,12 +145,8 @@ public class OrderService {
                 EventSeat seat = item.getSeat();
                 seat.setStatus(SeatStatus.SOLD);
                 eventSeatRepository.save(seat);
-            } else if (item.getTicketClassId() != null) {
-                EventZone zone = eventZoneRepository.findById(item.getTicketClassId()).orElse(null);
-                if (zone != null) {
-                    zone.setSoldCount(zone.getSoldCount() + item.getQuantity());
-                    eventZoneRepository.save(zone);
-                }
+            } else if (item.getEventZone() != null) {
+                // Đã tăng soldCount lúc tạo order rồi nên không làm gì thêm
             }
         }
     }
@@ -169,8 +167,14 @@ public class OrderService {
                 EventSeat seat = item.getSeat();
                 seat.setStatus(SeatStatus.AVAILABLE);
                 eventSeatRepository.save(seat);
+            } else if (item.getEventZone() != null) {
+                // Hủy đơn hàng -> trả lại vé vào soldCount
+                EventZone zone = item.getEventZone();
+                if (zone != null) {
+                    zone.setSoldCount(Math.max(0, zone.getSoldCount() - item.getQuantity()));
+                    eventZoneRepository.save(zone);
+                }
             }
-            // Không làm gì với zone vì lúc tạo order chưa tăng soldCount
         }
     }
 

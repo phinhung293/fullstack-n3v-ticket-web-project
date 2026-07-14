@@ -13,6 +13,8 @@ function Checkout() {
         selectedSeats?: EventSeatResponse[];
         selectedZones?: { zone: EventZoneResponse; quantity: number }[];
         total?: number;
+        orderCode?: string;
+        checkoutUrl?: string;
     };
 
     const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
@@ -48,18 +50,10 @@ function Checkout() {
     const totalTickets = (selectedSeats?.length || 0) + (selectedZones?.reduce((acc, curr) => acc + curr.quantity, 0) || 0);
 
     const handlePayment = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const payload = {
-                seatIds: selectedSeats ? selectedSeats.map(s => s.id) : [],
-                zones: selectedZones ? selectedZones.map(z => ({ zoneId: z.zone.id, quantity: z.quantity })) : []
-            };
-            const response = await createCheckout(payload);
-            window.location.href = response.checkoutUrl;
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng');
-            setLoading(false);
+        if (state.checkoutUrl) {
+            window.location.href = state.checkoutUrl;
+        } else {
+            setError('Không tìm thấy link thanh toán, vui lòng đặt lại vé.');
         }
     };
 

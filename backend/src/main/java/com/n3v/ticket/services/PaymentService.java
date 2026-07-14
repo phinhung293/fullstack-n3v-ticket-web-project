@@ -38,17 +38,19 @@ public class PaymentService {
                 }
             }
         }
+        long payOsAmount = order.getFinalAmount().longValue() / 1000;
+        
         vn.payos.model.v2.paymentRequests.PaymentLinkItem item = vn.payos.model.v2.paymentRequests.PaymentLinkItem.builder()
                 .name("Vé " + eventName)
                 .quantity(1)
-                .price(order.getFinalAmount().longValue())
+                .price(payOsAmount)
                 .build();
 
         long payOsOrderCode = Long.parseLong(order.getOrderCode());
 
         vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest paymentData = vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest.builder()
                 .orderCode(payOsOrderCode)
-                .amount(order.getFinalAmount().longValue())
+                .amount(payOsAmount)
                 .description("Thanh toan ve N3V")
                 .returnUrl(returnUrl)
                 .cancelUrl(cancelUrl)

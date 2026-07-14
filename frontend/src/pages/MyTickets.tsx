@@ -18,6 +18,7 @@ function MyTickets() {
     const [orders, setOrders] = useState<OrderResponse[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -122,12 +123,71 @@ function MyTickets() {
                                             Thanh toán ngay
                                         </a>
                                     )}
+                                    {order.status === 'SUCCESS' && (
+                                        <button
+                                            onClick={() => setSelectedOrder(order)}
+                                            className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] px-5 py-2.5 text-sm font-bold text-[#0B1736] transition hover:bg-[#F8FAFC]"
+                                        >
+                                            Xem chi tiết
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );
                     })}
                 </div>
 
+                {/* Order Details Modal */}
+                {selectedOrder && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm transition-opacity">
+                        <div className="relative w-full max-w-[500px] rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+                            <button 
+                                onClick={() => setSelectedOrder(null)}
+                                className="absolute right-4 top-4 rounded-full p-2 text-[#94A3B8] transition hover:bg-[#F1F5F9] hover:text-[#0B1736]"
+                            >
+                                <XCircle size={24} />
+                            </button>
+                            
+                            <div className="text-center">
+                                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-500">
+                                    <CheckCircle2 size={32} />
+                                </div>
+                                <h2 className="mt-4 text-2xl font-black text-[#0B1736]">Chi tiết vé</h2>
+                                <p className="mt-1 text-sm font-medium text-[#64748B]">Mã đơn hàng: #{selectedOrder.orderCode}</p>
+                            </div>
+                            
+                            <div className="mt-8 space-y-4 rounded-2xl bg-[#F8FAFC] p-5">
+                                <div className="flex justify-between border-b border-[#E2E8F0] pb-4">
+                                    <span className="text-sm font-medium text-[#64748B]">Sự kiện</span>
+                                    <span className="text-sm font-bold text-[#0B1736]">{selectedOrder.eventName}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-[#E2E8F0] pb-4">
+                                    <span className="text-sm font-medium text-[#64748B]">Trạng thái</span>
+                                    <span className="text-sm font-bold text-emerald-600">Đã thanh toán</span>
+                                </div>
+                                <div className="flex justify-between border-b border-[#E2E8F0] pb-4">
+                                    <span className="text-sm font-medium text-[#64748B]">Ngày đặt</span>
+                                    <span className="text-sm font-bold text-[#0B1736]">{formatDateTime(selectedOrder.createdAt)}</span>
+                                </div>
+                                <div className="flex flex-col gap-1 border-b border-[#E2E8F0] pb-4">
+                                    <span className="text-sm font-medium text-[#64748B]">Chi tiết ghế/khu vực</span>
+                                    <span className="text-sm font-bold text-[#0B1736]">{selectedOrder.ticketDetails}</span>
+                                </div>
+                                <div className="flex justify-between pt-2">
+                                    <span className="text-base font-black text-[#0B1736]">Tổng thanh toán</span>
+                                    <span className="text-lg font-black text-[#F43F73]">{formatCurrency(selectedOrder.totalAmount)}</span>
+                                </div>
+                            </div>
+                            
+                            <button
+                                onClick={() => setSelectedOrder(null)}
+                                className="mt-8 w-full rounded-xl bg-[#0B1736] py-3.5 text-sm font-black text-white transition hover:bg-[#0B1736]/90"
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

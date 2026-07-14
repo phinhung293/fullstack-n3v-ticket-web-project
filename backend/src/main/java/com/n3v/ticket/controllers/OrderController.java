@@ -44,6 +44,28 @@ public class OrderController {
         }
     }
 
+    @PutMapping("/{orderCode}/success")
+    public ApiResponse<?> markOrderSuccess(@PathVariable String orderCode) {
+        try {
+            orderService.markOrderSuccess(orderCode);
+            return ApiResponse.success("Cập nhật trạng thái thành công", null);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ApiResponse.error(400, e.getMessage());
+        }
+    }
+
+    @PutMapping("/{orderCode}/cancel")
+    public ApiResponse<?> markOrderCancel(@PathVariable String orderCode) {
+        try {
+            orderService.markOrderFailed(orderCode);
+            return ApiResponse.success("Đã huỷ đơn hàng", null);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ApiResponse.error(400, e.getMessage());
+        }
+    }
+
     @GetMapping("/my-orders")
     public ApiResponse<List<com.n3v.ticket.dto.OrderResponse>> getMyOrders(Authentication auth) {
         try {

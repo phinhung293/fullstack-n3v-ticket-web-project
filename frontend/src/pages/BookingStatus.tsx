@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, ArrowRight, Ticket, Home } from 'lucide-react';
 
+
+import apiClient from '../api/apiClient';
 
 function BookingStatus() {
     const { orderCode } = useParams();
@@ -13,11 +15,21 @@ function BookingStatus() {
     const isCancel = searchParams.get('cancel') === 'true' || status === 'cancel' || status === 'CANCELLED';
     const isSuccess = !isCancel && (status === 'success' || status === 'PAID');
 
+    const [updated, setUpdated] = useState(false);
+
     useEffect(() => {
         if (!orderCode) {
             navigate('/');
+        } else if (isSuccess && !updated) {
+            apiClient.put(`/api/orders/${orderCode}/success`)
+                .then(() => setUpdated(true))
+                .catch(console.error);
+        } else if (isCancel && !updated) {
+            apiClient.put(`/api/orders/${orderCode}/cancel`)
+                .then(() => setUpdated(true))
+                .catch(console.error);
         }
-    }, [orderCode, navigate]);
+    }, [orderCode, navigate, isSuccess, isCancel, updated]);
 
     if (!orderCode) return null;
 
