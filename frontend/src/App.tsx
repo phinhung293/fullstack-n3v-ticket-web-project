@@ -15,6 +15,10 @@ import EventDetail from './pages/EventDetail';
 import Checkout from './pages/Checkout';
 import BookingStatus from './pages/BookingStatus';
 import MyTickets from './pages/MyTickets';
+import Experiences from './pages/Experiences';
+import Venues from './pages/Venues';
+import News from './pages/News';
+import Promotions from './pages/Promotions';
 
 type ComingSoonPageProps = {
     title: string;
@@ -81,10 +85,10 @@ function App() {
                             <Route path="/concert" element={<Navigate to="/events?category=concert" replace />} />
                             <Route path="/sports" element={<Navigate to="/events?category=the-thao" replace />} />
                             <Route path="/arts" element={<Navigate to="/events?category=nghe-thuat" replace />} />
-                            <Route path="/experiences" element={<ComingSoonPage title="Trải nghiệm" />} />
-                            <Route path="/venues" element={<ComingSoonPage title="Địa điểm" />} />
-                            <Route path="/news" element={<ComingSoonPage title="Tin tức" />} />
-                            <Route path="/promotions" element={<ComingSoonPage title="Ưu đãi" />} />
+                            <Route path="/experiences" element={<Experiences />} />
+                            <Route path="/venues" element={<Venues />} />
+                            <Route path="/news" element={<News />} />
+                            <Route path="/promotions" element={<Promotions />} />
                             <Route path="/my-tickets" element={<ProtectedRoute><MyTickets /></ProtectedRoute>} />
                             <Route
                                 path="/favorites"
