@@ -127,8 +127,8 @@ function AdminEvents() {
                 </div>
             )}
 
-            <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white">
-                <table className="w-full table-fixed text-left text-sm">
+            <div className="overflow-x-auto custom-scrollbar rounded-xl border border-[#E2E8F0] bg-white">
+                <table className="w-full min-w-[900px] table-fixed text-left text-sm">
                     <thead>
                         <tr className="border-b border-[#E2E8F0] bg-[#FBFCFE] text-xs font-black text-[#0B1736]">
                             <th className="w-[28%] px-3 py-4">Sự kiện</th>

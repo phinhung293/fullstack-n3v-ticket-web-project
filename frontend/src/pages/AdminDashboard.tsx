@@ -23,6 +23,7 @@ import {
     UserRound,
     Users,
     X,
+    Menu,
 } from 'lucide-react';
 
 import axiosInstance from '../api/axiosInstance';
@@ -153,6 +154,7 @@ function AdminDashboard() {
 
     const [activeMenu, setActiveMenu] = useState('Tổng quan');
     const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const [users, setUsers] = useState<UserItem[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
@@ -385,18 +387,19 @@ function AdminDashboard() {
                             </button>
                         </div>
 
-                        <table className="w-full table-fixed text-left text-[11px]">
-                            <thead>
-                                <tr className="border-b border-[#E2E8F0] text-[#334155]">
-                                    <th className="w-[80px] pb-2 font-black">Mã đơn</th>
-                                    <th className="w-[170px] pb-2 font-black">Sự kiện</th>
-                                    <th className="w-[115px] pb-2 font-black">Khách hàng</th>
-                                    <th className="w-[42px] pb-2 font-black">Vé</th>
-                                    <th className="w-[90px] pb-2 font-black">Tổng tiền</th>
-                                    <th className="w-[110px] pb-2 font-black">Trạng thái</th>
-                                    <th className="w-[110px] pb-2 font-black">Thời gian</th>
-                                </tr>
-                            </thead>
+                        <div className="overflow-x-auto custom-scrollbar pb-2">
+                            <table className="w-full min-w-[700px] table-fixed text-left text-[11px]">
+                                <thead>
+                                    <tr className="border-b border-[#E2E8F0] text-[#334155]">
+                                        <th className="w-[80px] pb-2 font-black">Mã đơn</th>
+                                        <th className="w-[170px] pb-2 font-black">Sự kiện</th>
+                                        <th className="w-[115px] pb-2 font-black">Khách hàng</th>
+                                        <th className="w-[42px] pb-2 font-black">Vé</th>
+                                        <th className="w-[90px] pb-2 font-black">Tổng tiền</th>
+                                        <th className="w-[110px] pb-2 font-black">Trạng thái</th>
+                                        <th className="w-[110px] pb-2 font-black">Thời gian</th>
+                                    </tr>
+                                </thead>
 
                             <tbody>
                                 <tr>
@@ -406,6 +409,7 @@ function AdminDashboard() {
                                 </tr>
                             </tbody>
                         </table>
+                        </div>
                     </div>
 
                     <div className="min-w-0 overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
@@ -422,17 +426,18 @@ function AdminDashboard() {
                             </button>
                         </div>
 
-                        <table className="w-full table-fixed text-left text-[11px]">
-                            <thead>
-                                <tr className="border-b border-[#E2E8F0] text-[#334155]">
-                                    <th className="w-[190px] pb-2 font-black">Sự kiện</th>
-                                    <th className="w-[90px] pb-2 font-black">Thời gian</th>
-                                    <th className="w-[130px] pb-2 font-black">Địa điểm</th>
-                                    <th className="w-[90px] pb-2 font-black">Vé đã bán</th>
-                                    <th className="w-[70px] pb-2 font-black">Tỉ lệ</th>
-                                    <th className="w-[88px] pb-2 font-black">Trạng thái</th>
-                                </tr>
-                            </thead>
+                        <div className="overflow-x-auto custom-scrollbar pb-2">
+                            <table className="w-full min-w-[650px] table-fixed text-left text-[11px]">
+                                <thead>
+                                    <tr className="border-b border-[#E2E8F0] text-[#334155]">
+                                        <th className="w-[190px] pb-2 font-black">Sự kiện</th>
+                                        <th className="w-[90px] pb-2 font-black">Thời gian</th>
+                                        <th className="w-[130px] pb-2 font-black">Địa điểm</th>
+                                        <th className="w-[90px] pb-2 font-black">Vé đã bán</th>
+                                        <th className="w-[70px] pb-2 font-black">Tỉ lệ</th>
+                                        <th className="w-[88px] pb-2 font-black">Trạng thái</th>
+                                    </tr>
+                                </thead>
 
                             <tbody>
                                 <tr>
@@ -441,7 +446,8 @@ function AdminDashboard() {
                                     </td>
                                 </tr>
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -809,9 +815,15 @@ function AdminDashboard() {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#0B1736]">
-            <header className="fixed left-0 right-0 top-0 z-50 flex h-[76px] items-center justify-between border-b border-white/10 bg-[#061A35] px-8 text-white shadow-[0_6px_18px_rgba(15,23,42,0.14)]">
-                <div className="flex items-center">
+        <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#0B1736] overflow-x-hidden">
+            <header className="fixed left-0 right-0 top-0 z-50 flex h-[76px] items-center justify-between border-b border-white/10 bg-[#061A35] px-4 sm:px-8 text-white shadow-[0_6px_18px_rgba(15,23,42,0.14)]">
+                <div className="flex items-center gap-3">
+                    <button 
+                        className="lg:hidden p-1 text-white hover:text-[#F43F73] transition"
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    >
+                        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                    </button>
                     <img
                         src="/images/n3v-ticket-logo.png"
                         alt="N3V Ticket"
@@ -885,8 +897,15 @@ function AdminDashboard() {
                 </div>
             </header>
 
-            <aside className="fixed left-0 top-[76px] z-40 flex h-[calc(100vh-76px)] w-[240px] flex-col border-2 border-[#111827] bg-white text-[#0B1736] shadow-[8px_0_28px_rgba(15,23,42,0.06)]">
-                <nav className="mt-6 space-y-3 px-5">
+            {isMobileMenuOpen && (
+                <div 
+                    className="fixed inset-0 z-30 bg-black/50 lg:hidden top-[76px]"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
+            <aside className={`fixed left-0 top-[76px] z-40 flex h-[calc(100vh-76px)] w-[240px] flex-col border-2 border-[#111827] bg-white text-[#0B1736] shadow-[8px_0_28px_rgba(15,23,42,0.06)] transition-transform duration-300 lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <nav className="mt-6 space-y-3 px-5 overflow-y-auto custom-scrollbar">
                     {menuItems.map(({ label, icon: Icon }) => {
                         const isActive = activeMenu === label;
 
@@ -894,7 +913,7 @@ function AdminDashboard() {
                             <button
                                 key={label}
                                 type="button"
-                                onClick={() => setActiveMenu(label)}
+                                onClick={() => { setActiveMenu(label); setIsMobileMenuOpen(false); }}
                                 className={`flex h-[52px] w-full items-center gap-4 rounded-xl px-5 text-sm font-black transition ${isActive
                                     ? 'bg-[#F43F73] text-white shadow-[0_14px_28px_rgba(244,63,115,0.28)]'
                                     : 'text-[#334155] hover:bg-[#F8FAFC] hover:text-[#F43F73]'
@@ -930,7 +949,7 @@ function AdminDashboard() {
                 </div>
             </aside>
 
-            <main className="ml-[240px] min-h-screen bg-[#F8FAFC] p-6 pt-[100px]">
+            <main className="lg:ml-[240px] min-h-screen bg-[#F8FAFC] p-4 sm:p-6 pt-[100px]">
                 {renderContent()}
             </main>
         </div>

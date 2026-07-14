@@ -113,14 +113,16 @@ function Login() {
 
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_50%,rgba(244,63,115,0.18),transparent_32%),radial-gradient(circle_at_82%_55%,rgba(124,58,237,0.18),transparent_34%)]" />
 
-            <div className="relative mx-auto h-screen max-h-screen aspect-[3/2] overflow-hidden">
+            <div className="absolute inset-0 mx-auto h-screen max-h-screen w-full lg:aspect-[3/2] pointer-events-none">
                 <img
                     src="/images/login-bg.png"
                     alt=""
-                    className="absolute inset-0 h-full w-full object-contain object-center"
+                    className="absolute inset-0 h-full w-full object-cover lg:object-contain object-center opacity-70 lg:opacity-100"
                 />
+            </div>
 
-                <section className="absolute right-[6.8%] top-1/2 w-[37%] -translate-y-1/2">
+            <div className="relative mx-auto h-screen max-h-screen w-full max-w-[1320px]">
+                <section className="absolute inset-x-4 top-1/2 -translate-y-1/2 sm:inset-x-auto sm:right-[6.8%] sm:w-[400px] lg:w-[37%]">
                     <div className="w-full rounded-[24px] border border-[#F43F73]/65 bg-[#071126]/76 p-7 shadow-[0_0_45px_rgba(124,58,237,0.24)] backdrop-blur-md">
                         <div className="mb-6 flex items-start justify-between gap-5">
                             <h1 className="text-[36px] font-black leading-none tracking-tight text-white">
