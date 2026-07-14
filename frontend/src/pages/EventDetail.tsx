@@ -88,19 +88,23 @@ function EventDetail() {
     const allSeats = activeZones.flatMap((z) => seatsByZone[z.id] || []);
 
     const handleBuySeats = (selectedSeats: EventSeatResponse[], total: number) => {
-        // TODO: điểm tích hợp với Cart / Checkout thật (module Đặt vé & thanh toán) - hiện
-        // tại chỉ demo bằng alert, KHÔNG đụng vào logic Cart/Thanh toán hiện có của dự án.
-        const seatList = selectedSeats.map((seat) => seat.seatCode).join(', ');
-        alert(`Đã chọn ${selectedSeats.length} ghế (${seatList})\nTổng tiền: ${formatCurrency(total)}`);
+        navigate('/checkout', {
+            state: {
+                event,
+                selectedSeats,
+                total
+            }
+        });
     };
 
     const handleBuyZones = (
-        selections: { zone: EventZoneResponse; quantity: number }[],
-        total: number,
+        _selections: { zone: EventZoneResponse; quantity: number }[],
+        _total: number,
     ) => {
-        // TODO: điểm tích hợp với Cart / Checkout thật (module Đặt vé & thanh toán).
-        const summary = selections.map((s) => `${s.zone.zoneName} x${s.quantity}`).join(', ');
-        alert(`Đã chọn: ${summary}\nTổng tiền: ${formatCurrency(total)}`);
+        // We do not have seat selection for zones yet in the backend order flow.
+        // The backend expects seatIds. If mapType is ZONE, we need seatIds.
+        // But for now, we just pass what we have, though backend might fail if it strictly needs seat IDs.
+        alert("Tính năng mua vé theo khu vực (không chọn ghế) đang được phát triển.");
     };
 
     const pickerLabel = event.ticketMapType === 'ZONE' ? 'Chọn vé' : 'Chọn vị trí';

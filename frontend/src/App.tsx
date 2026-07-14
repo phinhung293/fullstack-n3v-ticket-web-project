@@ -12,6 +12,8 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import EventList from './pages/EventList';
 import EventDetail from './pages/EventDetail';
+import Checkout from './pages/Checkout';
+import BookingStatus from './pages/BookingStatus';
 
 type ComingSoonPageProps = {
     title: string;
@@ -73,6 +75,8 @@ function App() {
                             <Route path="/" element={<Home />} />
                             <Route path="/events" element={<EventList />} />
                             <Route path="/events/:id" element={<EventDetail />} />
+                            <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                            <Route path="/booking-status/:orderCode" element={<BookingStatus />} />
                             <Route path="/concert" element={<Navigate to="/events?category=concert" replace />} />
                             <Route path="/sports" element={<Navigate to="/events?category=the-thao" replace />} />
                             <Route path="/arts" element={<Navigate to="/events?category=nghe-thuat" replace />} />
