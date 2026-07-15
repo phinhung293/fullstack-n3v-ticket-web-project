@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Ticket, Clock, CheckCircle2, XCircle, AlertCircle, ArrowRight, Search, Filter, CalendarDays } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Ticket, Clock, CheckCircle2, XCircle, AlertCircle, Search, Filter, CalendarDays } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '../../utils/format';
 import { getMyOrders } from '../../api/bookingApi';
 

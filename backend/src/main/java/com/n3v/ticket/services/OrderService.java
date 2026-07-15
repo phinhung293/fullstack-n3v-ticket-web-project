@@ -38,6 +38,7 @@ public class OrderService {
     private final EventSeatRepository eventSeatRepository;
     private final EventZoneRepository eventZoneRepository;
     private final PaymentRepository paymentRepository;
+    private final TicketService ticketService;
 
     @Transactional
     public Order createOrder(User user, CheckoutRequest request) {
@@ -132,23 +133,29 @@ public class OrderService {
     @Transactional
     public void markOrderSuccess(String orderCode) {
         Order order = orderRepository.findByOrderCode(orderCode)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy đơn hàng"));
 
-        if (order.getStatus() == OrderStatus.SUCCESS) return;
+        List<OrderItem> items =
+                orderItemRepository.findByOrderId(order.getId());
+
+        if (order.getStatus() == OrderStatus.SUCCESS) {
+            ticketService.issueTicketsForOrder(order, items);
+            return;
+        }
 
         order.setStatus(OrderStatus.SUCCESS);
         orderRepository.save(order);
 
-        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
         for (OrderItem item : items) {
             if (item.getSeat() != null) {
                 EventSeat seat = item.getSeat();
                 seat.setStatus(SeatStatus.SOLD);
                 eventSeatRepository.save(seat);
-            } else if (item.getEventZone() != null) {
-                // Đã tăng soldCount lúc tạo order rồi nên không làm gì thêm
             }
         }
+
+        ticketService.issueTicketsForOrder(order, items);
     }
 
     @Transactional
