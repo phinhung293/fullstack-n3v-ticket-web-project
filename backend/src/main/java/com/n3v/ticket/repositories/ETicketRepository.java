@@ -2,6 +2,7 @@ package com.n3v.ticket.repositories;
 
 import com.n3v.ticket.entities.ETicket;
 import com.n3v.ticket.enums.TicketStatus;
+import com.n3v.ticket.entities.User;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -66,5 +67,23 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
     """)
     Optional<ETicket> findByQrCodeHashForUpdate(
             @Param("qrCodeHash") String qrCodeHash
+    );
+
+    /**
+     * Lấy danh sách tài khoản đang sở hữu vé của một sự kiện.
+     *
+     * DISTINCT tránh một user mua nhiều vé nhưng nhận nhiều
+     * thông báo giống nhau.
+     *
+     * Không gửi cho vé đã bị CANCELLED.
+     */
+    @Query("""
+    SELECT DISTINCT ticket.user
+    FROM ETicket ticket
+    WHERE ticket.event.id = :eventId
+      AND ticket.status <> com.n3v.ticket.enums.TicketStatus.CANCELLED
+""")
+    List<User> findDistinctUsersByEventId(
+            @Param("eventId") Long eventId
     );
 }

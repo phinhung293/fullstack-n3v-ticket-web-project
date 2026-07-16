@@ -24,10 +24,13 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -450,14 +453,37 @@ public class ReportPdfService {
     private PdfFont createVietnameseFont(boolean bold)
             throws IOException {
 
-        String windowsFontPath = bold
-                ? "C:/Windows/Fonts/arialbd.ttf"
-                : "C:/Windows/Fonts/arial.ttf";
+        List<String> fontCandidates = bold
+                ? List.of(
+                "C:/Windows/Fonts/arialbd.ttf",
+                "C:/Windows/Fonts/Arial Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+                "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+        )
+                : List.of(
+                "C:/Windows/Fonts/arial.ttf",
+                "C:/Windows/Fonts/Arial.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+                "/System/Library/Fonts/Supplemental/Arial.ttf"
+        );
 
-        return PdfFontFactory.createFont(
-                windowsFontPath,
-                PdfEncodings.IDENTITY_H,
-                PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED
+        for (String fontPath : fontCandidates) {
+            Path path = Path.of(fontPath);
+
+            if (Files.isRegularFile(path)) {
+                return PdfFontFactory.createFont(
+                        path.toString(),
+                        PdfEncodings.IDENTITY_H,
+                        PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED
+                );
+            }
+        }
+
+        throw new IOException(
+                "Không tìm thấy font Unicode để xuất PDF. "
+                        + "Hãy cài Arial hoặc DejaVu Sans trên máy chủ."
         );
     }
 

@@ -12,6 +12,11 @@ import com.n3v.ticket.enums.TicketStatus;
 import com.n3v.ticket.repositories.ETicketRepository;
 import com.n3v.ticket.common.exception.BadRequestException;
 import com.n3v.ticket.common.exception.NotFoundException;
+import com.n3v.ticket.dto.notification.CreateNotificationRequest;
+import com.n3v.ticket.entities.Role;
+import com.n3v.ticket.enums.NotificationType;
+import com.n3v.ticket.repositories.UserRepository;
+import com.n3v.ticket.enums.EventStatus;
 import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +38,8 @@ public class TicketService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     private final QrCodeService qrCodeService;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     /**
      * Sinh vé điện tử cho toàn bộ OrderItem của đơn hàng đã thanh toán.
@@ -199,8 +206,13 @@ public class TicketService {
                         new NotFoundException("Không tìm thấy vé")
                 );
 
-        if (ticket.getUser() == null
-                || !ticket.getUser().getEmail().equalsIgnoreCase(userEmail)) {
+        if (userEmail == null
+                || userEmail.isBlank()
+                || ticket.getUser() == null
+                || ticket.getUser().getEmail() == null
+                || !ticket.getUser()
+                .getEmail()
+                .equalsIgnoreCase(userEmail)) {
 
             throw new AccessDeniedException(
                     "Bạn không có quyền xem mã QR của vé này"
@@ -229,6 +241,8 @@ public class TicketService {
                 .orElseThrow(() ->
                         new BadRequestException("Mã QR không hợp lệ")
                 );
+
+        validateEventForCheckIn(ticket);
 
         if (ticket.getStatus() == TicketStatus.CHECKED_IN) {
             return CheckInResponse.builder()
@@ -277,6 +291,8 @@ public class TicketService {
 
         eTicketRepository.save(ticket);
 
+        notifyTicketCheckedIn(ticket);
+
         return CheckInResponse.builder()
                 .success(true)
                 .message("Check-in thành công")
@@ -304,6 +320,109 @@ public class TicketService {
                 )
                 .checkedInAt(now)
                 .build();
+    }
+
+    private void notifyTicketCheckedIn(ETicket ticket) {
+        if (ticket == null || ticket.getUser() == null) {
+            return;
+        }
+
+        User ticketOwner = ticket.getUser();
+
+        String eventName = ticket.getEvent() != null
+                ? ticket.getEvent().getName()
+                : "sự kiện";
+
+        /*
+         * Thông báo cho chủ vé.
+         */
+        notificationService.createNotification(
+                CreateNotificationRequest.builder()
+                        .userId(ticketOwner.getId())
+                        .type(NotificationType.TICKET_CHECKED_IN)
+                        .title("Vé đã được check-in")
+                        .message(
+                                "Vé "
+                                        + ticket.getTicketCode()
+                                        + " của sự kiện "
+                                        + eventName
+                                        + " đã được check-in thành công."
+                        )
+                        .targetUrl("/my-tickets")
+                        .referenceType("TICKET")
+                        .referenceId(ticket.getId())
+                        .deduplicationKey(
+                                "TICKET_CHECKED_IN_"
+                                        + ticket.getId()
+                                        + "_USER_"
+                                        + ticketOwner.getId()
+                        )
+                        .build()
+        );
+
+        /*
+         * Thông báo cho toàn bộ admin.
+         */
+        List<User> admins =
+                userRepository.findByRole_Name(Role.ADMIN);
+
+        for (User admin : admins) {
+            notificationService.createNotification(
+                    CreateNotificationRequest.builder()
+                            .userId(admin.getId())
+                            .type(
+                                    NotificationType.TICKET_CHECKED_IN
+                            )
+                            .title("Có vé vừa được check-in")
+                            .message(
+                                    "Vé "
+                                            + ticket.getTicketCode()
+                                            + " của "
+                                            + ticketOwner.getFullName()
+                                            + " vừa được check-in tại sự kiện "
+                                            + eventName
+                                            + "."
+                            )
+                            .targetUrl("/admin")
+                            .referenceType("TICKET")
+                            .referenceId(ticket.getId())
+                            .deduplicationKey(
+                                    "ADMIN_TICKET_CHECKED_IN_"
+                                            + ticket.getId()
+                                            + "_ADMIN_"
+                                            + admin.getId()
+                            )
+                            .build()
+            );
+        }
+    }
+
+    private void validateEventForCheckIn(ETicket ticket) {
+        Event event = ticket.getEvent();
+
+        if (event == null) {
+            throw new BadRequestException(
+                    "Vé chưa được liên kết với sự kiện"
+            );
+        }
+
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            throw new BadRequestException(
+                    "Không thể check-in vì sự kiện đã bị hủy"
+            );
+        }
+
+        if (event.getStatus() == EventStatus.COMPLETED) {
+            throw new BadRequestException(
+                    "Không thể check-in vì sự kiện đã kết thúc"
+            );
+        }
+
+        if (event.getStatus() == EventStatus.DRAFT) {
+            throw new BadRequestException(
+                    "Không thể check-in cho sự kiện chưa được công bố"
+            );
+        }
     }
 
     private String extractQrToken(String qrContent) {

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../utils/authStorage';
+import NotificationBell from '../components/NotificationBell';
 
 
 import {
     BarChart3,
-    Bell,
     CalendarDays,
     ChevronDown,
     CircleDollarSign,
@@ -1260,17 +1260,7 @@ function AdminDashboard() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                    <button
-                        type="button"
-                        className="relative flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-                        aria-label="Thông báo"
-                    >
-                        <Bell size={22} strokeWidth={2.2} />
-
-                        <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F43F73] px-1.5 text-xs font-black text-white">
-                            8
-                        </span>
-                    </button>
+                    <NotificationBell variant="admin" />
 
                     <div className="relative">
                         <button

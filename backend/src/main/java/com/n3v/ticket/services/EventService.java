@@ -15,6 +15,10 @@ import com.n3v.ticket.enums.TicketMapType;
 import com.n3v.ticket.repositories.CategoryRepository;
 import com.n3v.ticket.repositories.EventRepository;
 import com.n3v.ticket.specifications.EventSpecification;
+import com.n3v.ticket.dto.notification.CreateNotificationRequest;
+import com.n3v.ticket.entities.User;
+import com.n3v.ticket.enums.NotificationType;
+import com.n3v.ticket.repositories.ETicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +30,8 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -33,13 +39,16 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final CategoryRepository categoryRepository;
+    private final ETicketRepository eTicketRepository;
+    private final NotificationService notificationService;
 
     /**
      * Bang trang thai duoc phep chuyen toi. Dat o day de de doc/de test,
      * khong ran trai code nhu 1 chuoi if-else dai.
      */
     private static final Map<EventStatus, EnumSet<EventStatus>> ALLOWED_TRANSITIONS = new EnumMap<>(EventStatus.class);
-
+    private static final DateTimeFormatter EVENT_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm 'ngày' dd/MM/yyyy");
     static {
         ALLOWED_TRANSITIONS.put(EventStatus.DRAFT, EnumSet.of(EventStatus.PUBLISHED, EventStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(EventStatus.PUBLISHED, EnumSet.of(EventStatus.ONGOING, EventStatus.CANCELLED, EventStatus.DRAFT));
@@ -134,6 +143,8 @@ public class EventService {
     @Transactional
     public EventResponse update(Long id, EventUpdateRequest req) {
         Event event = findEntity(id);
+        LocalDateTime oldStartTime = event.getStartTime();
+        LocalDateTime oldEndTime = event.getEndTime();
 
         // Khong cho sua su kien da CANCELLED/COMPLETED (da "chot" du lieu).
         if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
@@ -160,7 +171,27 @@ public class EventService {
         // Co tinh khong cho doi ticketMapType khi update: neu zone/seat da duoc tao
         // theo 1 kieu so do, doi kieu giua chung se lam sai logic hien thi & dat ve.
 
-        return EventResponse.from(eventRepository.save(event));
+        Event savedEvent = eventRepository.save(event);
+
+        boolean scheduleChanged =
+                !Objects.equals(oldStartTime, savedEvent.getStartTime())
+                        || !Objects.equals(
+                        oldEndTime,
+                        savedEvent.getEndTime()
+                );
+
+        if (scheduleChanged
+                && (savedEvent.getStatus() == EventStatus.PUBLISHED
+                || savedEvent.getStatus() == EventStatus.ONGOING)) {
+
+            notifyEventRescheduled(
+                    savedEvent,
+                    oldStartTime,
+                    oldEndTime
+            );
+        }
+
+        return EventResponse.from(savedEvent);
     }
 
     @Transactional
@@ -183,7 +214,135 @@ public class EventService {
         }
 
         event.setStatus(newStatus);
-        return EventResponse.from(eventRepository.save(event));
+
+        Event savedEvent = eventRepository.save(event);
+
+        if (newStatus == EventStatus.CANCELLED) {
+            notifyEventCancelled(savedEvent);
+        }
+
+        return EventResponse.from(savedEvent);
+    }
+
+    private void notifyEventCancelled(Event event) {
+        List<User> recipients =
+                eTicketRepository.findDistinctUsersByEventId(
+                        event.getId()
+                );
+
+        for (User recipient : recipients) {
+            notificationService.createNotification(
+                    CreateNotificationRequest.builder()
+                            .userId(recipient.getId())
+                            .type(NotificationType.EVENT_CANCELLED)
+                            .title("Sự kiện đã bị hủy")
+                            .message(
+                                    "Sự kiện "
+                                            + event.getName()
+                                            + " đã bị hủy. "
+                                            + "Vui lòng kiểm tra thông tin đơn hàng "
+                                            + "hoặc liên hệ ban tổ chức để được hỗ trợ."
+                            )
+                            .targetUrl("/my-tickets")
+                            .referenceType("EVENT")
+                            .referenceId(event.getId())
+                            .deduplicationKey(
+                                    "EVENT_CANCELLED_"
+                                            + event.getId()
+                                            + "_USER_"
+                                            + recipient.getId()
+                            )
+                            .build()
+            );
+        }
+    }
+
+    private void notifyEventRescheduled(
+            Event event,
+            LocalDateTime oldStartTime,
+            LocalDateTime oldEndTime
+    ) {
+        List<User> recipients =
+                eTicketRepository.findDistinctUsersByEventId(
+                        event.getId()
+                );
+
+        String oldSchedule =
+                formatSchedule(oldStartTime, oldEndTime);
+
+        String newSchedule =
+                formatSchedule(
+                        event.getStartTime(),
+                        event.getEndTime()
+                );
+
+        for (User recipient : recipients) {
+            notificationService.createNotification(
+                    CreateNotificationRequest.builder()
+                            .userId(recipient.getId())
+                            .type(NotificationType.EVENT_RESCHEDULED)
+                            .title("Lịch sự kiện đã thay đổi")
+                            .message(
+                                    "Sự kiện "
+                                            + event.getName()
+                                            + " đã đổi lịch từ "
+                                            + oldSchedule
+                                            + " sang "
+                                            + newSchedule
+                                            + "."
+                            )
+                            .targetUrl(
+                                    "/events/" + event.getId()
+                            )
+                            .referenceType("EVENT")
+                            .referenceId(event.getId())
+                            .deduplicationKey(
+                                    buildRescheduleDeduplicationKey(
+                                            event,
+                                            recipient
+                                    )
+                            )
+                            .build()
+            );
+        }
+    }
+
+    private String buildRescheduleDeduplicationKey(
+            Event event,
+            User recipient
+    ) {
+        /*
+         * Có thêm thời gian mới trong khóa để nếu sự kiện đổi lịch
+         * lần thứ hai, user vẫn nhận được thông báo mới.
+         */
+        return "EVENT_RESCHEDULED_"
+                + event.getId()
+                + "_"
+                + event.getStartTime()
+                + "_"
+                + event.getEndTime()
+                + "_USER_"
+                + recipient.getId();
+    }
+
+    private String formatSchedule(
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        if (startTime == null) {
+            return "thời gian chưa xác định";
+        }
+
+        String formattedStart =
+                startTime.format(EVENT_TIME_FORMATTER);
+
+        if (endTime == null) {
+            return formattedStart;
+        }
+
+        return formattedStart
+                + " đến "
+                + endTime.format(EVENT_TIME_FORMATTER);
     }
 
     @Transactional

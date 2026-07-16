@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import com.n3v.ticket.services.ReportExcelService;
 
 
 import java.util.List;
@@ -23,7 +22,6 @@ import java.util.List;
 public class AdminDashboardController {
 
     private final DashboardService dashboardService;
-    private final ReportExcelService reportExcelService;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardSummaryResponse> getSummary() {
