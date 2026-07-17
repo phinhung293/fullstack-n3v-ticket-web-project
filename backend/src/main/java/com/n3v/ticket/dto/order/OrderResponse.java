@@ -1,4 +1,4 @@
-package com.n3v.ticket.dto;
+package com.n3v.ticket.dto.order;
 
 import lombok.Builder;
 import lombok.Data;
@@ -20,4 +20,5 @@ public class OrderResponse {
     private String customerName;
     private String customerEmail;
     private String customerPhone;
+    private Integer totalTickets;
 }

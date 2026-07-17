@@ -3,8 +3,11 @@ package com.n3v.ticket.repositories;
 import com.n3v.ticket.entities.Order;
 import com.n3v.ticket.enums.OrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,7 +17,23 @@ import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
+    List<Order> findTop5ByOrderByCreatedAtDesc();
     Optional<Order> findByOrderCode(String orderCode);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT ticketOrder
+        FROM Order ticketOrder
+        WHERE ticketOrder.orderCode = :orderCode
+    """)
+    Optional<Order> findByOrderCodeForUpdate(
+            @Param("orderCode") String orderCode
+    );
+
+    Optional<Order> findByOrderCodeAndUserId(
+            String orderCode,
+            Long userId
+    );
 
     List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
 

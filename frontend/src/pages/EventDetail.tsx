@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, MapPin, MousePointerClick, Ticket } from 'lucide-react';
 import SeatMap from '../components/events/SeatMap';
@@ -23,7 +23,7 @@ function EventDetail() {
     const [error, setError] = useState('');
     const [showPicker, setShowPicker] = useState(false);
     const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-
+    const creatingOrderRef = useRef(false);
     // zoneId -> danh sách ghế/bàn của zone đó (SEAT_MAP / TEA_LOUNGE)
     const [seatsByZone, setSeatsByZone] = useState<Record<number, EventSeatResponse[]>>({});
     const [seatsLoading, setSeatsLoading] = useState(false);
@@ -89,53 +89,84 @@ function EventDetail() {
     // Tất cả ghế/bàn (SEAT_MAP hoặc TEA_LOUNGE) của các zone đã tải, gộp lại cho SeatMap.
     const allSeats = activeZones.flatMap((z) => seatsByZone[z.id] || []);
 
-    const handleBuySeats = async (selectedSeats: EventSeatResponse[], total: number) => {
+    const handleBuySeats = async (
+        selectedSeats: EventSeatResponse[],
+        total: number,
+    ) => {
+        if (creatingOrderRef.current) return;
+
+        creatingOrderRef.current = true;
         setIsCreatingOrder(true);
+        setError('');
+
         try {
             const payload = {
-                seatIds: selectedSeats.map((s) => s.id),
-                zones: []
+                seatIds: selectedSeats.map((seat) => seat.id),
+                zones: [],
             };
+
             const response = await createCheckout(payload);
+
             navigate('/checkout', {
                 state: {
                     event,
                     selectedSeats,
                     total,
                     orderCode: response.orderCode,
-                    checkoutUrl: response.checkoutUrl
-                }
+                    checkoutUrl: response.checkoutUrl,
+                },
             });
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng');
+            setError(
+                err.response?.data?.message ||
+                'Có lỗi xảy ra khi tạo đơn hàng',
+            );
         } finally {
+            creatingOrderRef.current = false;
             setIsCreatingOrder(false);
         }
     };
 
     const handleBuyZones = async (
-        selections: { zone: EventZoneResponse; quantity: number }[],
+        selections: {
+            zone: EventZoneResponse;
+            quantity: number;
+        }[],
         total: number,
     ) => {
+        if (creatingOrderRef.current) return;
+
+        creatingOrderRef.current = true;
         setIsCreatingOrder(true);
+        setError('');
+
         try {
             const payload = {
                 seatIds: [],
-                zones: selections.map((s) => ({ zoneId: s.zone.id, quantity: s.quantity }))
+                zones: selections.map((selection) => ({
+                    zoneId: selection.zone.id,
+                    quantity: selection.quantity,
+                })),
             };
+
             const response = await createCheckout(payload);
+
             navigate('/checkout', {
                 state: {
                     event,
                     selectedZones: selections,
                     total,
                     orderCode: response.orderCode,
-                    checkoutUrl: response.checkoutUrl
-                }
+                    checkoutUrl: response.checkoutUrl,
+                },
             });
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng');
+            setError(
+                err.response?.data?.message ||
+                'Có lỗi xảy ra khi tạo đơn hàng',
+            );
         } finally {
+            creatingOrderRef.current = false;
             setIsCreatingOrder(false);
         }
     };

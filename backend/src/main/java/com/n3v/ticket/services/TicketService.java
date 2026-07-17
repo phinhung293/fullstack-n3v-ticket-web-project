@@ -1,5 +1,6 @@
 package com.n3v.ticket.services;
 
+import com.n3v.ticket.dto.checkin.CheckInEventResponse;
 import com.n3v.ticket.dto.checkin.CheckInResponse;
 import com.n3v.ticket.entities.ETicket;
 import com.n3v.ticket.entities.Event;
@@ -7,16 +8,20 @@ import com.n3v.ticket.entities.EventSeat;
 import com.n3v.ticket.entities.EventZone;
 import com.n3v.ticket.entities.Order;
 import com.n3v.ticket.entities.OrderItem;
+import com.n3v.ticket.entities.Payment;
 import com.n3v.ticket.entities.User;
+import com.n3v.ticket.enums.CheckInWindowStatus;
+import com.n3v.ticket.enums.EventStatus;
+import com.n3v.ticket.enums.NotificationType;
+import com.n3v.ticket.enums.OrderStatus;
 import com.n3v.ticket.enums.TicketStatus;
 import com.n3v.ticket.repositories.ETicketRepository;
+import com.n3v.ticket.repositories.EventRepository;
+import com.n3v.ticket.repositories.PaymentRepository;
+import com.n3v.ticket.common.TicketQrPayload;
 import com.n3v.ticket.common.exception.BadRequestException;
 import com.n3v.ticket.common.exception.NotFoundException;
 import com.n3v.ticket.dto.notification.CreateNotificationRequest;
-import com.n3v.ticket.entities.Role;
-import com.n3v.ticket.enums.NotificationType;
-import com.n3v.ticket.repositories.UserRepository;
-import com.n3v.ticket.enums.EventStatus;
 import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,7 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.n3v.ticket.dto.ticket.TicketResponse;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -33,13 +41,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TicketService {
 
+    private static final ZoneId VIETNAM_ZONE =
+            ZoneId.of("Asia/Ho_Chi_Minh");
+
+    private static final long CHECK_IN_OPEN_MINUTES_BEFORE = 60;
+
+    private static final DateTimeFormatter CHECK_IN_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm 'ngày' dd/MM/yyyy");
+
+    private static final List<EventStatus> CHECK_IN_EVENT_STATUSES =
+            List.of(EventStatus.PUBLISHED, EventStatus.ONGOING);
+
     private final ETicketRepository eTicketRepository;
+    private final EventRepository eventRepository;
+    private final PaymentRepository paymentRepository;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
     private final QrCodeService qrCodeService;
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
 
     /**
      * Sinh vé điện tử cho toàn bộ OrderItem của đơn hàng đã thanh toán.
@@ -160,6 +180,76 @@ public class TicketService {
                 .toList();
     }
 
+    /**
+     * Hiển thị các sự kiện còn hoạt động của hôm nay và ngày mai.
+     * Admin có thể mở trước màn hình sự kiện để chuẩn bị thiết bị,
+     * nhưng máy quét chỉ hoạt động khi checkInStatus = OPEN.
+     */
+    @Transactional(readOnly = true)
+    public List<CheckInEventResponse> getEventsAvailableForCheckIn() {
+        LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
+        LocalDateTime visibleUntil = now
+                .toLocalDate()
+                .plusDays(2)
+                .atStartOfDay();
+
+        return eventRepository
+                .findEventsAvailableForCheckIn(
+                        CHECK_IN_EVENT_STATUSES,
+                        now,
+                        visibleUntil
+                )
+                .stream()
+                .map(event -> mapToCheckInEventResponse(event, now))
+                .toList();
+    }
+
+    private CheckInEventResponse mapToCheckInEventResponse(
+            Event event,
+            LocalDateTime now
+    ) {
+        LocalDateTime checkInOpenAt = resolveCheckInOpenAt(event);
+        LocalDateTime checkInCloseAt = resolveCheckInCloseAt(event);
+        CheckInWindowStatus windowStatus = resolveCheckInWindowStatus(
+                event,
+                now
+        );
+
+        long totalTickets = eTicketRepository
+                .countByEventIdAndStatusIn(
+                        event.getId(),
+                        List.of(
+                                TicketStatus.ISSUED,
+                                TicketStatus.CHECKED_IN
+                        )
+                );
+
+        long checkedInTickets = eTicketRepository
+                .countByEventIdAndStatus(
+                        event.getId(),
+                        TicketStatus.CHECKED_IN
+                );
+
+        return CheckInEventResponse.builder()
+                .id(event.getId())
+                .name(event.getName())
+                .thumbnailUrl(event.getThumbnailUrl())
+                .venueName(event.getVenueName())
+                .address(event.getAddress())
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .checkInOpenAt(checkInOpenAt)
+                .checkInCloseAt(checkInCloseAt)
+                .eventStatus(event.getStatus().name())
+                .checkInStatus(windowStatus.name())
+                .totalTickets(totalTickets)
+                .checkedInTickets(checkedInTickets)
+                .remainingTickets(
+                        Math.max(0, totalTickets - checkedInTickets)
+                )
+                .build();
+    }
+
     private TicketResponse mapToTicketResponse(ETicket ticket) {
         Event event = ticket.getEvent();
         EventZone eventZone = ticket.getEventZone();
@@ -219,8 +309,9 @@ public class TicketService {
             );
         }
 
-        String qrContent =
-                "N3V:TICKET:" + ticket.getQrCodeHash();
+        String qrContent = TicketQrPayload.fromToken(
+                ticket.getQrCodeHash()
+        );
 
         return qrCodeService.generatePng(
                 qrContent,
@@ -231,9 +322,29 @@ public class TicketService {
 
     @Transactional
     public CheckInResponse checkInTicket(
+            Long selectedEventId,
             String qrContent,
             User checkedInBy
     ) {
+        if (selectedEventId == null || selectedEventId <= 0) {
+            throw new BadRequestException(
+                    "Phải chọn sự kiện trước khi check-in"
+            );
+        }
+
+        Event selectedEvent = eventRepository
+                .findById(selectedEventId)
+                .orElseThrow(() ->
+                        new NotFoundException(
+                                "Không tìm thấy sự kiện check-in"
+                        )
+                );
+
+        LocalDateTime nowInVietnam =
+                LocalDateTime.now(VIETNAM_ZONE);
+
+        validateEventForCheckIn(selectedEvent, nowInVietnam);
+
         String qrToken = extractQrToken(qrContent);
 
         ETicket ticket = eTicketRepository
@@ -242,7 +353,12 @@ public class TicketService {
                         new BadRequestException("Mã QR không hợp lệ")
                 );
 
-        validateEventForCheckIn(ticket);
+        validateTicketBelongsToSelectedEvent(
+                ticket,
+                selectedEventId
+        );
+
+        validateTicketPayment(ticket);
 
         if (ticket.getStatus() == TicketStatus.CHECKED_IN) {
             return CheckInResponse.builder()
@@ -250,6 +366,7 @@ public class TicketService {
                     .message("Vé đã được check-in trước đó")
                     .ticketCode(ticket.getTicketCode())
                     .ticketStatus(ticket.getStatus().name())
+                    .eventId(selectedEventId)
                     .customerName(
                             ticket.getUser() != null
                                     ? ticket.getUser().getFullName()
@@ -271,6 +388,11 @@ public class TicketService {
                                     : null
                     )
                     .checkedInAt(ticket.getCheckedInAt())
+                    .checkedInByName(
+                            ticket.getCheckedInBy() != null
+                                    ? ticket.getCheckedInBy().getFullName()
+                                    : null
+                    )
                     .build();
         }
 
@@ -280,10 +402,11 @@ public class TicketService {
                     .message("Vé không còn hiệu lực")
                     .ticketCode(ticket.getTicketCode())
                     .ticketStatus(ticket.getStatus().name())
+                    .eventId(selectedEventId)
                     .build();
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(VIETNAM_ZONE);
 
         ticket.setStatus(TicketStatus.CHECKED_IN);
         ticket.setCheckedInAt(now);
@@ -298,6 +421,7 @@ public class TicketService {
                 .message("Check-in thành công")
                 .ticketCode(ticket.getTicketCode())
                 .ticketStatus(ticket.getStatus().name())
+                .eventId(selectedEventId)
                 .customerName(
                         ticket.getUser() != null
                                 ? ticket.getUser().getFullName()
@@ -319,6 +443,7 @@ public class TicketService {
                                 : null
                 )
                 .checkedInAt(now)
+                .checkedInByName(checkedInBy.getFullName())
                 .build();
     }
 
@@ -360,49 +485,15 @@ public class TicketService {
                         .build()
         );
 
-        /*
-         * Thông báo cho toàn bộ admin.
-         */
-        List<User> admins =
-                userRepository.findByRole_Name(Role.ADMIN);
-
-        for (User admin : admins) {
-            notificationService.createNotification(
-                    CreateNotificationRequest.builder()
-                            .userId(admin.getId())
-                            .type(
-                                    NotificationType.TICKET_CHECKED_IN
-                            )
-                            .title("Có vé vừa được check-in")
-                            .message(
-                                    "Vé "
-                                            + ticket.getTicketCode()
-                                            + " của "
-                                            + ticketOwner.getFullName()
-                                            + " vừa được check-in tại sự kiện "
-                                            + eventName
-                                            + "."
-                            )
-                            .targetUrl("/admin")
-                            .referenceType("TICKET")
-                            .referenceId(ticket.getId())
-                            .deduplicationKey(
-                                    "ADMIN_TICKET_CHECKED_IN_"
-                                            + ticket.getId()
-                                            + "_ADMIN_"
-                                            + admin.getId()
-                            )
-                            .build()
-            );
-        }
     }
 
-    private void validateEventForCheckIn(ETicket ticket) {
-        Event event = ticket.getEvent();
-
+    private void validateEventForCheckIn(
+            Event event,
+            LocalDateTime now
+    ) {
         if (event == null) {
             throw new BadRequestException(
-                    "Vé chưa được liên kết với sự kiện"
+                    "Không tìm thấy sự kiện check-in"
             );
         }
 
@@ -423,26 +514,108 @@ public class TicketService {
                     "Không thể check-in cho sự kiện chưa được công bố"
             );
         }
+
+        if (event.getStartTime() == null || event.getEndTime() == null) {
+            throw new BadRequestException(
+                    "Sự kiện chưa có thời gian bắt đầu hoặc kết thúc hợp lệ"
+            );
+        }
+
+        CheckInWindowStatus windowStatus =
+                resolveCheckInWindowStatus(event, now);
+
+        if (windowStatus == CheckInWindowStatus.NOT_OPEN) {
+            throw new BadRequestException(
+                    "Check-in chưa mở. Hệ thống sẽ mở lúc "
+                            + resolveCheckInOpenAt(event)
+                            .format(CHECK_IN_TIME_FORMATTER)
+                            + " (trước sự kiện 60 phút)"
+            );
+        }
+
+        if (windowStatus == CheckInWindowStatus.CLOSED) {
+            throw new BadRequestException(
+                    "Check-in đã đóng vì sự kiện đã kết thúc"
+            );
+        }
+    }
+
+    private void validateTicketBelongsToSelectedEvent(
+            ETicket ticket,
+            Long selectedEventId
+    ) {
+        if (ticket.getEvent() == null) {
+            throw new BadRequestException(
+                    "Vé chưa được liên kết với sự kiện"
+            );
+        }
+
+        if (!selectedEventId.equals(ticket.getEvent().getId())) {
+            throw new BadRequestException(
+                    "Vé không thuộc sự kiện đang được chọn"
+            );
+        }
+    }
+
+    private void validateTicketPayment(ETicket ticket) {
+        OrderItem orderItem = ticket.getOrderItem();
+        Order order = orderItem != null ? orderItem.getOrder() : null;
+
+        if (order == null || order.getStatus() != OrderStatus.SUCCESS) {
+            throw new BadRequestException(
+                    "Vé không thuộc đơn hàng đã hoàn tất"
+            );
+        }
+
+        Payment payment = paymentRepository
+                .findByOrderId(order.getId())
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Không tìm thấy thanh toán của vé"
+                        )
+                );
+
+        if (!"PAID".equals(payment.getStatus())) {
+            throw new BadRequestException(
+                    "Vé chưa được xác nhận thanh toán"
+            );
+        }
+    }
+
+    private LocalDateTime resolveCheckInOpenAt(Event event) {
+        return event.getStartTime()
+                .minusMinutes(CHECK_IN_OPEN_MINUTES_BEFORE);
+    }
+
+    private LocalDateTime resolveCheckInCloseAt(Event event) {
+        return event.getEndTime();
+    }
+
+    private CheckInWindowStatus resolveCheckInWindowStatus(
+            Event event,
+            LocalDateTime now
+    ) {
+        LocalDateTime openAt = resolveCheckInOpenAt(event);
+        LocalDateTime closeAt = resolveCheckInCloseAt(event);
+
+        if (now.isBefore(openAt)) {
+            return CheckInWindowStatus.NOT_OPEN;
+        }
+
+        if (now.isAfter(closeAt)) {
+            return CheckInWindowStatus.CLOSED;
+        }
+
+        return CheckInWindowStatus.OPEN;
     }
 
     private String extractQrToken(String qrContent) {
-
-        String prefix = "N3V:TICKET:";
-
-        if (qrContent == null || !qrContent.startsWith(prefix)) {
+        try {
+            return TicketQrPayload.extractToken(qrContent);
+        } catch (IllegalArgumentException exception) {
             throw new BadRequestException(
-                    "Định dạng mã QR không hợp lệ"
+                    exception.getMessage()
             );
         }
-
-        String qrToken = qrContent.substring(prefix.length()).trim();
-
-        if (qrToken.isBlank()) {
-            throw new BadRequestException(
-                    "Mã QR không hợp lệ"
-            );
-        }
-
-        return qrToken;
     }
 }

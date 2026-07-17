@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../utils/authStorage';
 import NotificationBell from '../components/NotificationBell';
-
+import { getLatestNotifications } from '../api/notificationApi';
+import type { NotificationItem } from '../types/notification';
 
 import {
     BarChart3,
+    Bell,
     CalendarDays,
     ChevronDown,
     CircleDollarSign,
@@ -17,8 +19,6 @@ import {
     Plus,
     ScanLine,
     Search,
-    Settings,
-    Tag,
     Ticket,
     Trash2,
     UserRound,
@@ -91,15 +91,35 @@ type EditUserForm = {
     status: 'ACTIVE' | 'LOCKED';
 };
 
+type RecentOrderItem = {
+    orderCode: string;
+    eventName: string;
+    customerName: string | null;
+    totalTickets: number;
+    totalAmount: number;
+    status: string;
+    createdAt: string;
+};
+
+type UpcomingEventItem = {
+    id: number;
+    name: string;
+    startTime: string;
+    venueName: string | null;
+    city: string | null;
+    soldTickets: number;
+    totalCapacity: number;
+    salesRate: number;
+    status: string;
+};
+
 const menuItems = [
     { label: 'Tổng quan', icon: Home },
     { label: 'Check-in', icon: ScanLine },
     { label: 'Sự kiện', icon: CalendarDays },
     { label: 'Đơn vé', icon: ClipboardList },
     { label: 'Người dùng', icon: Users },
-    { label: 'Khuyến mãi', icon: Tag },
     { label: 'Báo cáo', icon: BarChart3 },
-    { label: 'Cài đặt', icon: Settings },
 ];
 
 const getErrorMessage = (error: unknown) => {
@@ -229,6 +249,88 @@ function AdminDashboard() {
     const [loadingDashboard, setLoadingDashboard] = useState(false);
     const [dashboardError, setDashboardError] = useState('');
 
+    const [recentOrders, setRecentOrders] =
+        useState<RecentOrderItem[]>([]);
+
+    const [recentActivities, setRecentActivities] =
+        useState<NotificationItem[]>([]);
+
+    const [upcomingEvents, setUpcomingEvents] =
+        useState<UpcomingEventItem[]>([]);
+
+    const [loadingOverviewLists, setLoadingOverviewLists] =
+        useState(false);
+
+    const [overviewListsError, setOverviewListsError] =
+        useState('');
+
+    const fetchOverviewLists = async () => {
+        setLoadingOverviewLists(true);
+        setOverviewListsError('');
+
+        try {
+            const [
+                ordersResponse,
+                notifications,
+                eventsResponse,
+            ] = await Promise.all([
+                axiosInstance.get<ApiResponse<RecentOrderItem[]>>(
+                    '/admin/dashboard/recent-orders',
+                ),
+                getLatestNotifications(),
+                axiosInstance.get<ApiResponse<UpcomingEventItem[]>>(
+                    '/admin/dashboard/upcoming-events',
+                ),
+            ]);
+
+            setRecentOrders(ordersResponse.data.data || []);
+            setRecentActivities(notifications.slice(0, 5));
+            setUpcomingEvents(eventsResponse.data.data || []);
+        } catch (error) {
+            console.error(
+                'Không thể tải danh sách tổng quan',
+                error,
+            );
+
+            setOverviewListsError(
+                getErrorMessage(error),
+            );
+        } finally {
+            setLoadingOverviewLists(false);
+        }
+    };
+
+    const formatDateTime = (value: string) => {
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+
+        return date.toLocaleString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+    };
+
+    const getOrderStatusLabel = (status: string) => {
+        switch (status) {
+            case 'SUCCESS':
+                return 'Thành công';
+            case 'PENDING':
+                return 'Chờ thanh toán';
+            case 'FAILED':
+                return 'Thanh toán không hoàn tất';
+            case 'CANCELLED':
+                return 'Đã hủy';
+            default:
+                return status;
+        }
+    };
+
     const dashboardCards = [
         {
             title: 'Tổng doanh thu',
@@ -344,6 +446,12 @@ function AdminDashboard() {
             void fetchTicketChart(ticketDays);
         }
     }, [activeMenu, ticketDays]);
+
+    useEffect(() => {
+        if (activeMenu === 'Tổng quan') {
+            void fetchOverviewLists();
+        }
+    }, [activeMenu]);
 
     const fetchRevenueChart = async (days: RevenuePeriod) => {
         setLoadingRevenue(true);
@@ -479,8 +587,14 @@ function AdminDashboard() {
                 </div>
 
                 {dashboardError && (
-                    <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
                         {dashboardError}
+                    </div>
+                )}
+
+                {overviewListsError && (
+                    <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        Không thể tải đơn vé, hoạt động hoặc sự kiện: {overviewListsError}
                     </div>
                 )}
 
@@ -781,16 +895,49 @@ function AdminDashboard() {
                             <h3 className="text-base font-black text-[#0B1736]">
                                 Thông báo & Hoạt động
                             </h3>
-
-                            <button
-                                type="button"
-                                className="text-xs font-black text-[#F43F73]"
-                            >
-                                Xem tất cả
-                            </button>
                         </div>
 
-                        <div className="h-[232px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
+                        <div className="h-[232px] overflow-y-auto rounded-xl border border-[#E2E8F0] bg-white">
+                            {loadingOverviewLists ? (
+                                <div className="space-y-3 p-4">
+                                    {[1, 2, 3].map((item) => (
+                                        <div
+                                            key={item}
+                                            className="h-14 animate-pulse rounded-lg bg-[#F1F5F9]"
+                                        />
+                                    ))}
+                                </div>
+                            ) : recentActivities.length === 0 ? (
+                                <div className="flex h-full items-center justify-center text-sm font-semibold text-[#94A3B8]">
+                                    Chưa có hoạt động
+                                </div>
+                            ) : (
+                                recentActivities.map((activity) => (
+                                    <div
+                                        key={activity.id}
+                                        className="flex gap-3 border-b border-[#F1F5F9] p-3 last:border-0"
+                                    >
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1F5] text-[#F43F73]">
+                                            <Bell size={17} />
+                                        </div>
+
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-xs font-black text-[#0B1736]">
+                                                {activity.title}
+                                            </p>
+
+                                            <p className="mt-1 line-clamp-2 text-[11px] font-medium text-[#64748B]">
+                                                {activity.message}
+                                            </p>
+
+                                            <p className="mt-1 text-[10px] font-semibold text-[#94A3B8]">
+                                                {formatDateTime(activity.createdAt)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -804,6 +951,7 @@ function AdminDashboard() {
                             <button
                                 type="button"
                                 className="text-xs font-black text-[#F43F73]"
+                                onClick={() => setActiveMenu('Đơn vé')}
                             >
                                 Xem tất cả ›
                             </button>
@@ -823,13 +971,59 @@ function AdminDashboard() {
                                     </tr>
                                 </thead>
 
-                            <tbody>
-                                <tr>
-                                    <td colSpan={7}>
-                                        <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
-                                    </td>
-                                </tr>
-                            </tbody>
+                                <tbody>
+                                    {loadingOverviewLists ? (
+                                        <tr>
+                                            <td colSpan={7} className="py-8 text-center">
+                                                Đang tải...
+                                            </td>
+                                        </tr>
+                                    ) : recentOrders.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={7}
+                                                className="py-8 text-center font-semibold text-[#94A3B8]"
+                                            >
+                                                Chưa có đơn vé
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        recentOrders.map((order) => (
+                                            <tr
+                                                key={order.orderCode}
+                                                className="border-b border-[#F1F5F9]"
+                                            >
+                                                <td className="py-3 font-bold">
+                                                    #{order.orderCode}
+                                                </td>
+
+                                                <td className="truncate py-3">
+                                                    {order.eventName}
+                                                </td>
+
+                                                <td className="truncate py-3">
+                                                    {order.customerName || 'Khách hàng'}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {order.totalTickets}
+                                                </td>
+
+                                                <td className="py-3 font-bold text-[#F43F73]">
+                                                    {formatCurrency(order.totalAmount)}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {getOrderStatusLabel(order.status)}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {formatDateTime(order.createdAt)}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
                         </table>
                         </div>
                     </div>
@@ -843,6 +1037,7 @@ function AdminDashboard() {
                             <button
                                 type="button"
                                 className="text-xs font-black text-[#F43F73]"
+                                onClick={() => setActiveMenu('Sự kiện')}
                             >
                                 Xem tất cả ›
                             </button>
@@ -861,13 +1056,57 @@ function AdminDashboard() {
                                     </tr>
                                 </thead>
 
-                            <tbody>
-                                <tr>
-                                    <td colSpan={6}>
-                                        <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
-                                    </td>
-                                </tr>
-                            </tbody>
+                                <tbody>
+                                    {loadingOverviewLists ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-8 text-center">
+                                                Đang tải...
+                                            </td>
+                                        </tr>
+                                    ) : upcomingEvents.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={6}
+                                                className="py-8 text-center font-semibold text-[#94A3B8]"
+                                            >
+                                                Chưa có sự kiện sắp diễn ra
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        upcomingEvents.map((event) => (
+                                            <tr
+                                                key={event.id}
+                                                className="border-b border-[#F1F5F9]"
+                                            >
+                                                <td className="truncate py-3 font-bold">
+                                                    {event.name}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {formatDateTime(event.startTime)}
+                                                </td>
+
+                                                <td className="truncate py-3">
+                                                    {event.venueName || event.city || 'Chưa cập nhật'}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {event.soldTickets}/{event.totalCapacity}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {event.salesRate}%
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {event.status === 'ONGOING'
+                                                        ? 'Đang diễn ra'
+                                                        : 'Sắp diễn ra'}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
                             </table>
                         </div>
                     </div>

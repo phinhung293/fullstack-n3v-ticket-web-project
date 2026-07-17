@@ -53,11 +53,44 @@ export default function AdminOrders() {
     const getStatusStyle = (status: string) => {
         switch (status) {
             case 'SUCCESS':
-                return { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: CheckCircle2, label: 'Thành công' };
+                return {
+                    bg: 'bg-emerald-50',
+                    text: 'text-emerald-600',
+                    icon: CheckCircle2,
+                    label: 'Thành công',
+                };
+
             case 'PENDING':
-                return { bg: 'bg-amber-50', text: 'text-amber-600', icon: Clock, label: 'Chờ thanh toán' };
+                return {
+                    bg: 'bg-amber-50',
+                    text: 'text-amber-600',
+                    icon: Clock,
+                    label: 'Chờ thanh toán',
+                };
+
+            case 'FAILED':
+                return {
+                    bg: 'bg-red-50',
+                    text: 'text-red-600',
+                    icon: XCircle,
+                    label: 'Thanh toán không hoàn tất',
+                };
+
+            case 'CANCELLED':
+                return {
+                    bg: 'bg-slate-100',
+                    text: 'text-slate-600',
+                    icon: XCircle,
+                    label: 'Đã hủy',
+                };
+
             default:
-                return { bg: 'bg-red-50', text: 'text-red-600', icon: XCircle, label: 'Đã huỷ' };
+                return {
+                    bg: 'bg-slate-100',
+                    text: 'text-slate-600',
+                    icon: XCircle,
+                    label: status,
+                };
         }
     };
 
@@ -70,8 +103,8 @@ export default function AdminOrders() {
 
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            result = result.filter(order => 
-                order.orderCode.toLowerCase().includes(query) || 
+            result = result.filter(order =>
+                order.orderCode.toLowerCase().includes(query) ||
                 order.eventName.toLowerCase().includes(query) ||
                 (order.customerName && order.customerName.toLowerCase().includes(query)) ||
                 (order.customerEmail && order.customerEmail.toLowerCase().includes(query)) ||
@@ -107,7 +140,7 @@ export default function AdminOrders() {
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative flex-1 max-w-md">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
-                    <input 
+                    <input
                         type="text"
                         placeholder="Tìm theo mã đơn, tên sự kiện, KH..."
                         value={searchQuery}
@@ -115,7 +148,7 @@ export default function AdminOrders() {
                         className="h-11 w-full rounded-xl border border-[#CBD5E1] bg-white pl-10 pr-4 text-sm font-medium text-[#0B1736] outline-none transition focus:border-[#F43F73] focus:ring-4 focus:ring-[#F43F73]/10"
                     />
                 </div>
-                
+
                 <div className="flex gap-3">
                     <div className="relative">
                         <select
@@ -126,7 +159,8 @@ export default function AdminOrders() {
                             <option value="ALL">Tất cả trạng thái</option>
                             <option value="SUCCESS">Thành công</option>
                             <option value="PENDING">Chờ thanh toán</option>
-                            <option value="FAILED">Đã huỷ</option>
+                            <option value="FAILED">Thanh toán không hoàn tất</option>
+                            <option value="CANCELLED">Đã hủy</option>
                         </select>
                         <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
                     </div>
@@ -215,13 +249,13 @@ export default function AdminOrders() {
             {selectedOrder && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm transition-opacity">
                     <div className="relative w-full max-w-[500px] rounded-3xl bg-white p-6 shadow-2xl sm:p-8 max-h-[90vh] overflow-y-auto">
-                        <button 
+                        <button
                             onClick={() => setSelectedOrder(null)}
                             className="absolute right-4 top-4 rounded-full p-2 text-[#94A3B8] transition hover:bg-[#F1F5F9] hover:text-[#0B1736]"
                         >
                             <XCircle size={24} />
                         </button>
-                        
+
                         <div className="text-center">
                             <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${getStatusStyle(selectedOrder.status).bg} ${getStatusStyle(selectedOrder.status).text}`}>
                                 {(() => {
@@ -232,7 +266,7 @@ export default function AdminOrders() {
                             <h2 className="mt-4 text-2xl font-black text-[#0B1736]">Chi tiết đơn hàng</h2>
                             <p className="mt-1 text-sm font-medium text-[#64748B]">Mã đơn: #{selectedOrder.orderCode}</p>
                         </div>
-                        
+
                         <div className="mt-8 space-y-4 rounded-2xl bg-[#F8FAFC] p-5">
                             <div className="flex justify-between border-b border-[#E2E8F0] pb-4">
                                 <span className="text-sm font-medium text-[#64748B]">Khách hàng</span>
@@ -265,7 +299,7 @@ export default function AdminOrders() {
                                 <span className="text-lg font-black text-[#F43F73]">{formatCurrency(selectedOrder.totalAmount)}</span>
                             </div>
                         </div>
-                        
+
                         <button
                             onClick={() => setSelectedOrder(null)}
                             className="mt-8 w-full rounded-xl bg-[#0B1736] py-3.5 text-sm font-black text-white transition hover:bg-[#0B1736]/90"

@@ -5,6 +5,9 @@ import com.n3v.ticket.dto.dashboard.DashboardSummaryResponse;
 import com.n3v.ticket.dto.dashboard.RevenueChartResponse;
 import com.n3v.ticket.dto.dashboard.TicketChartResponse;
 import com.n3v.ticket.services.DashboardService;
+import com.n3v.ticket.dto.order.OrderResponse;
+import com.n3v.ticket.dto.dashboard.UpcomingEventDashboardResponse;
+import com.n3v.ticket.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +25,7 @@ import java.util.List;
 public class AdminDashboardController {
 
     private final DashboardService dashboardService;
+    private final OrderService orderService;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardSummaryResponse> getSummary() {
@@ -48,6 +52,23 @@ public class AdminDashboardController {
         return ApiResponse.success(
                 "Lấy dữ liệu số vé theo ngày thành công",
                 dashboardService.getDailyTicketCount(days)
+        );
+    }
+
+    @GetMapping("/recent-orders")
+    public ApiResponse<List<OrderResponse>> getRecentOrders() {
+        return ApiResponse.success(
+                "Lấy đơn vé gần đây thành công",
+                orderService.getRecentOrdersForAdmin()
+        );
+    }
+
+    @GetMapping("/upcoming-events")
+    public ApiResponse<List<UpcomingEventDashboardResponse>>
+    getUpcomingEvents() {
+        return ApiResponse.success(
+                "Lấy sự kiện sắp diễn ra thành công",
+                dashboardService.getUpcomingEvents()
         );
     }
 }

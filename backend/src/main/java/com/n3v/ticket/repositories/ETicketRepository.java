@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,22 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
     Optional<ETicket> findByQrCodeHash(String qrCodeHash);
 
     List<ETicket> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    @Query("""
+        SELECT ticket
+        FROM ETicket ticket
+        JOIN FETCH ticket.orderItem orderItem
+        JOIN FETCH orderItem.order ticketOrder
+        JOIN FETCH ticketOrder.user
+        LEFT JOIN FETCH ticket.event
+        LEFT JOIN FETCH ticket.eventZone
+        LEFT JOIN FETCH ticket.seat
+        WHERE ticketOrder.id = :orderId
+        ORDER BY ticket.id ASC
+    """)
+    List<ETicket> findAllByOrderIdWithEmailDetails(
+            @Param("orderId") Long orderId
+    );
 
     boolean existsByOrderItemId(Long orderItemId);
 
@@ -35,6 +52,16 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
             TicketStatus status,
             OffsetDateTime from,
             OffsetDateTime to
+    );
+
+    long countByEventIdAndStatusIn(
+            Long eventId,
+            Collection<TicketStatus> statuses
+    );
+
+    long countByEventIdAndStatus(
+            Long eventId,
+            TicketStatus status
     );
 
     @Query(
@@ -63,6 +90,8 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
         LEFT JOIN FETCH ticket.event
         LEFT JOIN FETCH ticket.eventZone
         LEFT JOIN FETCH ticket.seat
+        LEFT JOIN FETCH ticket.orderItem orderItem
+        LEFT JOIN FETCH orderItem.order
         WHERE ticket.qrCodeHash = :qrCodeHash
     """)
     Optional<ETicket> findByQrCodeHashForUpdate(

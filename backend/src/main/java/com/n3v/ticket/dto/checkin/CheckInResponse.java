@@ -15,10 +15,12 @@ public class CheckInResponse {
     private String ticketCode;
     private String ticketStatus;
 
+    private Long eventId;
     private String customerName;
     private String eventName;
     private String zoneName;
     private String seatCode;
 
     private OffsetDateTime checkedInAt;
+    private String checkedInByName;
 }

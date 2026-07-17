@@ -12,9 +12,11 @@ import com.n3v.ticket.repositories.OrderItemRepository;
 import com.n3v.ticket.repositories.OrderRepository;
 import com.n3v.ticket.repositories.PaymentRepository;
 import com.n3v.ticket.dto.CheckoutRequest;
-import com.n3v.ticket.dto.OrderResponse;
+import com.n3v.ticket.dto.order.OrderResponse;
+import com.n3v.ticket.dto.order.OrderStatusResponse;
 import com.n3v.ticket.entities.EventZone;
 import com.n3v.ticket.entities.Payment;
+import com.n3v.ticket.common.exception.ConflictException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+
+import vn.payos.PayOS;
+import vn.payos.model.v2.paymentRequests.PaymentLink;
+import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -39,11 +44,12 @@ public class OrderService {
     private final EventZoneRepository eventZoneRepository;
     private final PaymentRepository paymentRepository;
     private final TicketService ticketService;
+    private final PayOS payOS;
 
     @Transactional
     public Order createOrder(User user, CheckoutRequest request) {
-        if ((request.getSeatIds() == null || request.getSeatIds().isEmpty()) && 
-            (request.getZones() == null || request.getZones().isEmpty())) {
+        if ((request.getSeatIds() == null || request.getSeatIds().isEmpty()) &&
+                (request.getZones() == null || request.getZones().isEmpty())) {
             throw new RuntimeException("Giỏ hàng rỗng");
         }
 
@@ -55,7 +61,7 @@ public class OrderService {
                 .user(user)
                 .status(OrderStatus.PENDING)
                 .build();
-        
+
         // Cần lưu order trước để có reference trong OrderItem
         // Tạm set số tiền bằng 0 để save
         order.setTotalAmount(java.math.BigDecimal.ZERO);
@@ -76,9 +82,9 @@ public class OrderService {
                 eventSeatRepository.save(seat);
 
                 java.math.BigDecimal seatPrice = seat.getPrice() != null ? seat.getPrice() : seat.getEventZone().getPrice();
-                
+
                 totalAmount = totalAmount.add(seatPrice);
-                
+
                 OrderItem item = OrderItem.builder()
                         .order(order)
                         .seat(seat)
@@ -95,16 +101,16 @@ public class OrderService {
             for (CheckoutRequest.ZoneSelection selection : request.getZones()) {
                 EventZone zone = eventZoneRepository.findById(selection.getZoneId())
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
-                
+
                 // Kiểm tra số lượng
                 if (zone.getTotalCapacity() != null && (zone.getSoldCount() + selection.getQuantity() > zone.getTotalCapacity())) {
                     throw new RuntimeException("Khu vực " + zone.getZoneName() + " không đủ vé.");
                 }
-                
+
                 // Giữ chỗ (lock) bằng cách tăng soldCount ngay lúc tạo đơn
                 zone.setSoldCount(zone.getSoldCount() + selection.getQuantity());
                 eventZoneRepository.save(zone);
-                
+
                 java.math.BigDecimal subtotal = zone.getPrice().multiply(new java.math.BigDecimal(selection.getQuantity()));
                 totalAmount = totalAmount.add(subtotal);
 
@@ -132,7 +138,7 @@ public class OrderService {
 
     @Transactional
     public void markOrderSuccess(String orderCode) {
-        Order order = orderRepository.findByOrderCode(orderCode)
+        Order order = orderRepository.findByOrderCodeForUpdate(orderCode)
                 .orElseThrow(() ->
                         new RuntimeException("Không tìm thấy đơn hàng"));
 
@@ -144,23 +150,83 @@ public class OrderService {
             return;
         }
 
-        order.setStatus(OrderStatus.SUCCESS);
-        orderRepository.save(order);
+        boolean reservationWasReleased =
+                order.getStatus() == OrderStatus.FAILED
+                        || order.getStatus() == OrderStatus.CANCELLED;
+
+        if (order.getStatus() != OrderStatus.PENDING
+                && !reservationWasReleased) {
+            throw new ConflictException(
+                    "Đơn hàng không thể chuyển sang thành công"
+            );
+        }
 
         for (OrderItem item : items) {
             if (item.getSeat() != null) {
-                EventSeat seat = item.getSeat();
+                EventSeat seat = eventSeatRepository
+                        .findByIdWithPessimisticLock(
+                                item.getSeat().getId()
+                        )
+                        .orElseThrow(() ->
+                                new ConflictException(
+                                        "Ghế của đơn hàng không còn tồn tại"
+                                )
+                        );
+
+                if (reservationWasReleased
+                        && seat.getStatus() != SeatStatus.AVAILABLE) {
+                    throw new ConflictException(
+                            "PayOS đã xác nhận thanh toán nhưng ghế "
+                                    + seat.getSeatCode()
+                                    + " đã được giữ bởi đơn khác. "
+                                    + "Cần xử lý hoàn tiền thủ công."
+                    );
+                }
+
                 seat.setStatus(SeatStatus.SOLD);
                 eventSeatRepository.save(seat);
+            } else if (reservationWasReleased
+                    && item.getEventZone() != null) {
+                EventZone zone = eventZoneRepository
+                        .findByIdForUpdate(item.getEventZone().getId())
+                        .orElseThrow(() ->
+                                new ConflictException(
+                                        "Khu vực vé không còn tồn tại"
+                                )
+                        );
+
+                int soldCount = zone.getSoldCount() != null
+                        ? zone.getSoldCount()
+                        : 0;
+                int quantity = item.getQuantity() != null
+                        ? item.getQuantity()
+                        : 1;
+
+                if (zone.getTotalCapacity() != null
+                        && soldCount + quantity
+                        > zone.getTotalCapacity()) {
+                    throw new ConflictException(
+                            "PayOS đã xác nhận thanh toán nhưng khu vực "
+                                    + zone.getZoneName()
+                                    + " không còn đủ vé. "
+                                    + "Cần xử lý hoàn tiền thủ công."
+                    );
+                }
+
+                zone.setSoldCount(soldCount + quantity);
+                eventZoneRepository.save(zone);
             }
         }
+
+        order.setStatus(OrderStatus.SUCCESS);
+        orderRepository.save(order);
 
         ticketService.issueTicketsForOrder(order, items);
     }
 
     @Transactional
     public void markOrderFailed(String orderCode) {
-        Order order = orderRepository.findByOrderCode(orderCode)
+        Order order = orderRepository.findByOrderCodeForUpdate(orderCode)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
 
         if (order.getStatus() != OrderStatus.PENDING) return;
@@ -171,14 +237,34 @@ public class OrderService {
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
         for (OrderItem item : items) {
             if (item.getSeat() != null) {
-                EventSeat seat = item.getSeat();
-                seat.setStatus(SeatStatus.AVAILABLE);
-                eventSeatRepository.save(seat);
+                EventSeat seat = eventSeatRepository
+                        .findByIdWithPessimisticLock(
+                                item.getSeat().getId()
+                        )
+                        .orElse(null);
+
+                if (seat != null
+                        && seat.getStatus() == SeatStatus.LOCKED) {
+                    seat.setStatus(SeatStatus.AVAILABLE);
+                    eventSeatRepository.save(seat);
+                }
             } else if (item.getEventZone() != null) {
                 // Hủy đơn hàng -> trả lại vé vào soldCount
-                EventZone zone = item.getEventZone();
+                EventZone zone = eventZoneRepository
+                        .findByIdForUpdate(item.getEventZone().getId())
+                        .orElse(null);
+
                 if (zone != null) {
-                    zone.setSoldCount(Math.max(0, zone.getSoldCount() - item.getQuantity()));
+                    int soldCount = zone.getSoldCount() != null
+                            ? zone.getSoldCount()
+                            : 0;
+                    int quantity = item.getQuantity() != null
+                            ? item.getQuantity()
+                            : 1;
+
+                    zone.setSoldCount(
+                            Math.max(0, soldCount - quantity)
+                    );
                     eventZoneRepository.save(zone);
                 }
             }
@@ -193,15 +279,135 @@ public class OrderService {
         List<Order> expiredOrders = orderRepository.findByStatusAndExpiredAtBefore(OrderStatus.PENDING, now);
 
         for (Order order : expiredOrders) {
+            if (mustKeepOrderWhilePayOsIsUnsettled(order)) {
+                continue;
+            }
+
             log.info("Hủy đơn hàng hết hạn: {}", order.getOrderCode());
             markOrderFailed(order.getOrderCode());
         }
+    }
+
+    /**
+     * Không được hủy đơn local khi link PayOS vẫn có khả năng nhận tiền.
+     * Với link còn PENDING, phải hủy link PayOS trước rồi mới trả tồn kho.
+     * Nếu không gọi được PayOS, giữ đơn lại để tránh nhận tiền nhưng mất vé.
+     */
+    private boolean mustKeepOrderWhilePayOsIsUnsettled(Order order) {
+        Payment payment = paymentRepository
+                .findByOrderId(order.getId())
+                .orElse(null);
+
+        if (payment == null) {
+            return false;
+        }
+
+        if ("PAID".equals(payment.getStatus())) {
+            return true;
+        }
+
+        try {
+            long payOsOrderCode = Long.parseLong(
+                    payment.getTransactionId()
+            );
+
+            PaymentLink paymentLink = payOS
+                    .paymentRequests()
+                    .get(payOsOrderCode);
+
+            if (isProviderPaymentUnsettled(paymentLink.getStatus())) {
+                updatePaymentFromProvider(payment, paymentLink);
+                return true;
+            }
+
+            if (paymentLink.getStatus() == PaymentLinkStatus.PENDING) {
+                PaymentLink cancelledLink = payOS
+                        .paymentRequests()
+                        .cancel(
+                                payOsOrderCode,
+                                "Đơn hàng quá thời gian thanh toán"
+                        );
+
+                updatePaymentFromProvider(payment, cancelledLink);
+
+                return isProviderPaymentUnsettled(
+                        cancelledLink.getStatus()
+                ) || cancelledLink.getStatus()
+                        == PaymentLinkStatus.PENDING;
+            }
+
+            updatePaymentFromProvider(payment, paymentLink);
+            return false;
+        } catch (Exception exception) {
+            log.warn(
+                    "Không hủy đơn {} vì chưa đối soát được PayOS",
+                    order.getOrderCode(),
+                    exception
+            );
+            return true;
+        }
+    }
+
+    private boolean isProviderPaymentUnsettled(
+            PaymentLinkStatus status
+    ) {
+        return status == PaymentLinkStatus.PAID
+                || status == PaymentLinkStatus.UNDERPAID
+                || status == PaymentLinkStatus.PROCESSING;
+    }
+
+    private void updatePaymentFromProvider(
+            Payment payment,
+            PaymentLink paymentLink
+    ) {
+        payment.setStatus(paymentLink.getStatus().getValue());
+
+        try {
+            payment.setResponseData(
+                    new ObjectMapper().writeValueAsString(paymentLink)
+            );
+        } catch (Exception exception) {
+            log.warn(
+                    "Không thể lưu phản hồi PayOS của đơn {}",
+                    payment.getOrder().getOrderCode(),
+                    exception
+            );
+        }
+
+        paymentRepository.save(payment);
     }
 
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByUser(User user) {
         List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         return orders.stream().map(this::mapToOrderResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public OrderStatusResponse getOrderStatus(
+            String orderCode,
+            User user
+    ) {
+        Order order = orderRepository
+                .findByOrderCodeAndUserId(orderCode, user.getId())
+                .orElseThrow(() ->
+                        new com.n3v.ticket.common.exception.NotFoundException(
+                                "Không tìm thấy đơn hàng"
+                        )
+                );
+
+        Payment payment = paymentRepository
+                .findByOrderId(order.getId())
+                .orElse(null);
+
+        return OrderStatusResponse.builder()
+                .orderCode(order.getOrderCode())
+                .orderStatus(order.getStatus().name())
+                .paymentStatus(
+                        payment != null ? payment.getStatus() : null
+                )
+                .ticketsReady(order.getStatus() == OrderStatus.SUCCESS)
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -273,6 +479,15 @@ public class OrderService {
                 .customerName(order.getUser() != null ? order.getUser().getFullName() : null)
                 .customerEmail(order.getUser() != null ? order.getUser().getEmail() : null)
                 .customerPhone(order.getUser() != null ? order.getUser().getPhone() : null)
+                .totalTickets(totalTickets)
                 .build();
+    }
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getRecentOrdersForAdmin() {
+        return orderRepository
+                .findTop5ByOrderByCreatedAtDesc()
+                .stream()
+                .map(this::mapToOrderResponse)
+                .toList();
     }
 }

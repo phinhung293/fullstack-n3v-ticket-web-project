@@ -9,6 +9,11 @@ import com.n3v.ticket.enums.TicketStatus;
 import com.n3v.ticket.repositories.DailyTicketProjection;
 import com.n3v.ticket.repositories.ETicketRepository;
 import com.n3v.ticket.repositories.OrderRepository;
+import com.n3v.ticket.dto.dashboard.UpcomingEventDashboardResponse;
+import com.n3v.ticket.entities.Event;
+import com.n3v.ticket.enums.EventStatus;
+import com.n3v.ticket.enums.TicketMapType;
+import com.n3v.ticket.repositories.EventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +32,7 @@ public class DashboardService {
 
     private final OrderRepository orderRepository;
     private final ETicketRepository eTicketRepository;
+    private final EventRepository eventRepository;
 
     @Transactional(readOnly = true)
     public DashboardSummaryResponse getSummary() {
@@ -137,5 +143,66 @@ public class DashboardService {
                     );
                 })
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UpcomingEventDashboardResponse> getUpcomingEvents() {
+        LocalDateTime now = LocalDateTime.now();
+
+        return eventRepository
+                .findTop5ByStatusInAndEndTimeGreaterThanEqualOrderByStartTimeAsc(
+                        List.of(
+                                EventStatus.PUBLISHED,
+                                EventStatus.ONGOING
+                        ),
+                        now
+                )
+                .stream()
+                .map(this::mapUpcomingEvent)
+                .toList();
+    }
+
+    private UpcomingEventDashboardResponse mapUpcomingEvent(Event event) {
+        int totalCapacity = event.getZones()
+                .stream()
+                .mapToInt(zone -> {
+                    if (event.getTicketMapType() == TicketMapType.ZONE) {
+                        return zone.getTotalCapacity() != null
+                                ? zone.getTotalCapacity()
+                                : 0;
+                    }
+
+                    return zone.getSeats() != null
+                            ? zone.getSeats().size()
+                            : 0;
+                })
+                .sum();
+
+        long soldTickets =
+                eTicketRepository.countByEventIdAndStatusIn(
+                        event.getId(),
+                        List.of(
+                                TicketStatus.ISSUED,
+                                TicketStatus.CHECKED_IN
+                        )
+                );
+
+        double salesRate = totalCapacity == 0
+                ? 0
+                : soldTickets * 100.0 / totalCapacity;
+
+        salesRate = Math.round(salesRate * 100.0) / 100.0;
+
+        return UpcomingEventDashboardResponse.builder()
+                .id(event.getId())
+                .name(event.getName())
+                .startTime(event.getStartTime())
+                .venueName(event.getVenueName())
+                .city(event.getCity())
+                .soldTickets(soldTickets)
+                .totalCapacity(totalCapacity)
+                .salesRate(salesRate)
+                .status(event.getStatus())
+                .build();
     }
 }

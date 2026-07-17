@@ -1,6 +1,7 @@
 package com.n3v.ticket.controllers;
 
 import com.n3v.ticket.common.exception.NotFoundException;
+import com.n3v.ticket.dto.checkin.CheckInEventResponse;
 import com.n3v.ticket.dto.checkin.CheckInRequest;
 import com.n3v.ticket.dto.checkin.CheckInResponse;
 import com.n3v.ticket.entities.User;
@@ -12,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/admin/check-in")
 @RequiredArgsConstructor
@@ -20,6 +23,11 @@ public class AdminCheckInController {
 
     private final TicketService ticketService;
     private final UserRepository userRepository;
+
+    @GetMapping("/events")
+    public List<CheckInEventResponse> getCheckInEvents() {
+        return ticketService.getEventsAvailableForCheckIn();
+    }
 
     @PostMapping
     public CheckInResponse checkIn(
@@ -43,6 +51,7 @@ public class AdminCheckInController {
                 );
 
         return ticketService.checkInTicket(
+                request.getEventId(),
                 request.getQrContent(),
                 admin
         );

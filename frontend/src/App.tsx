@@ -81,7 +81,14 @@ function App() {
                             <Route path="/events" element={<EventList />} />
                             <Route path="/events/:id" element={<EventDetail />} />
                             <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-                            <Route path="/booking-status/:orderCode" element={<BookingStatus />} />
+                            <Route
+                                path="/booking-status/:orderCode"
+                                element={
+                                    <ProtectedRoute>
+                                        <BookingStatus />
+                                    </ProtectedRoute>
+                                }
+                            />
                             <Route path="/concert" element={<Navigate to="/events?category=concert" replace />} />
                             <Route path="/sports" element={<Navigate to="/events?category=the-thao" replace />} />
                             <Route path="/arts" element={<Navigate to="/events?category=nghe-thuat" replace />} />
