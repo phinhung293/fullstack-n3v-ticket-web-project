@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 import {
-    Bell,
     ChevronDown,
     Heart,
     LogOut,
@@ -189,13 +189,7 @@ function Header() {
                                 >
                                     <Heart size={16} /> Yêu thích
                                 </NavLink>
-                                <button
-                                    type="button"
-                                    className="relative flex h-8 w-8 items-center justify-center text-white transition hover:text-[#F43F73]"
-                                >
-                                    <Bell size={17} />
-                                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F43F73] px-1 text-[10px] font-black leading-none text-white">3</span>
-                                </button>
+                                <NotificationBell variant="user" />
                                 <div className="relative">
                                     <button
                                         type="button"

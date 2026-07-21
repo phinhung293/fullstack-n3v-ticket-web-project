@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Clock, ShieldCheck, Ticket, CreditCard, AlertCircle } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '../utils/format';
 import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
-import { createCheckout } from '../api/bookingApi';
+
 
 function Checkout() {
     const location = useLocation();
@@ -18,7 +18,7 @@ function Checkout() {
     };
 
     const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
-    const [loading, setLoading] = useState(false);
+    const [loading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../utils/authStorage';
-
+import NotificationBell from '../components/NotificationBell';
+import { getLatestNotifications } from '../api/notificationApi';
+import type { NotificationItem } from '../types/notification';
 
 import {
     BarChart3,
@@ -15,9 +17,8 @@ import {
     LogOut,
     Pencil,
     Plus,
+    ScanLine,
     Search,
-    Settings,
-    Tag,
     Ticket,
     Trash2,
     UserRound,
@@ -29,6 +30,20 @@ import {
 import axiosInstance from '../api/axiosInstance';
 import AdminEvents from './admin/AdminEvents';
 import AdminOrders from './admin/AdminOrders';
+import AdminCheckIn from './admin/AdminCheckIn';
+
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from 'recharts';
+import AdminReports from "./admin/AdminReports.tsx";
 
 type UserItem = {
     id: number;
@@ -49,6 +64,26 @@ type ApiResponse<T> = {
     timestamp: string;
 };
 
+type DashboardSummary = {
+    totalRevenue: number;
+    successfulOrders: number;
+    totalTickets: number;
+    checkedInTickets: number;
+    checkInRate: number;
+};
+
+type RevenueChartItem = {
+    date: string;
+    revenue: number;
+};
+
+type TicketChartItem = {
+    date: string;
+    ticketCount: number;
+};
+
+type RevenuePeriod = 7 | 30 | 90;
+
 type EditUserForm = {
     fullName: string;
     phone: string;
@@ -56,37 +91,35 @@ type EditUserForm = {
     status: 'ACTIVE' | 'LOCKED';
 };
 
+type RecentOrderItem = {
+    orderCode: string;
+    eventName: string;
+    customerName: string | null;
+    totalTickets: number;
+    totalAmount: number;
+    status: string;
+    createdAt: string;
+};
+
+type UpcomingEventItem = {
+    id: number;
+    name: string;
+    startTime: string;
+    venueName: string | null;
+    city: string | null;
+    soldTickets: number;
+    totalCapacity: number;
+    salesRate: number;
+    status: string;
+};
+
 const menuItems = [
     { label: 'Tổng quan', icon: Home },
+    { label: 'Check-in', icon: ScanLine },
     { label: 'Sự kiện', icon: CalendarDays },
     { label: 'Đơn vé', icon: ClipboardList },
     { label: 'Người dùng', icon: Users },
-    { label: 'Khuyến mãi', icon: Tag },
     { label: 'Báo cáo', icon: BarChart3 },
-    { label: 'Cài đặt', icon: Settings },
-];
-
-const statCards = [
-    {
-        title: 'Tổng vé đã bán',
-        icon: Ticket,
-        iconClass: 'bg-[#F43F73]/12 text-[#F43F73]',
-    },
-    {
-        title: 'Doanh thu hôm nay',
-        icon: CircleDollarSign,
-        iconClass: 'bg-[#8B5CF6]/12 text-[#8B5CF6]',
-    },
-    {
-        title: 'Sự kiện đang hoạt động',
-        icon: CalendarDays,
-        iconClass: 'bg-[#2563EB]/12 text-[#2563EB]',
-    },
-    {
-        title: 'Người dùng mới',
-        icon: UserRound,
-        iconClass: 'bg-[#22C55E]/12 text-[#16A34A]',
-    },
 ];
 
 const getErrorMessage = (error: unknown) => {
@@ -149,12 +182,191 @@ const getDateLabel = (value?: string | null) => {
     return date.toLocaleDateString('vi-VN');
 };
 
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+        style: 'currency',
+        currency: 'VND',
+        maximumFractionDigits: 0,
+    }).format(value);
+};
+
+const formatChartDate = (value: string) => {
+    const [year, month, day] = value.split('-');
+
+    if (!year || !month || !day) {
+        return value;
+    }
+
+    return `${day}/${month}`;
+};
+
+const formatFullChartDate = (value: string) => {
+    const [year, month, day] = value.split('-');
+
+    if (!year || !month || !day) {
+        return value;
+    }
+
+    return `${day}/${month}/${year}`;
+};
+
+const formatChartCurrency = (value: number) => {
+    if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toLocaleString('vi-VN', {
+            maximumFractionDigits: 1,
+        })} tr`;
+    }
+
+    if (value >= 1_000) {
+        return `${(value / 1_000).toLocaleString('vi-VN', {
+            maximumFractionDigits: 0,
+        })}k`;
+    }
+
+    return value.toLocaleString('vi-VN');
+};
+
 function AdminDashboard() {
     const navigate = useNavigate();
 
     const [activeMenu, setActiveMenu] = useState('Tổng quan');
     const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const [dashboardSummary, setDashboardSummary] =
+        useState<DashboardSummary | null>(null);
+
+    const [revenueChart, setRevenueChart] = useState<RevenueChartItem[]>([]);
+    const [revenueDays, setRevenueDays] = useState<RevenuePeriod>(7);
+    const [loadingRevenue, setLoadingRevenue] = useState(false);
+    const [revenueError, setRevenueError] = useState('');
+
+    const [ticketChart, setTicketChart] = useState<TicketChartItem[]>([]);
+    const [ticketDays, setTicketDays] = useState<RevenuePeriod>(7);
+    const [loadingTickets, setLoadingTickets] = useState(false);
+    const [ticketError, setTicketError] = useState('');
+
+    const [loadingDashboard, setLoadingDashboard] = useState(false);
+    const [dashboardError, setDashboardError] = useState('');
+
+    const [recentOrders, setRecentOrders] =
+        useState<RecentOrderItem[]>([]);
+
+    const [recentActivities, setRecentActivities] =
+        useState<NotificationItem[]>([]);
+
+    const [upcomingEvents, setUpcomingEvents] =
+        useState<UpcomingEventItem[]>([]);
+
+    const [loadingOverviewLists, setLoadingOverviewLists] =
+        useState(false);
+
+    const [overviewListsError, setOverviewListsError] =
+        useState('');
+
+    const fetchOverviewLists = async () => {
+        setLoadingOverviewLists(true);
+        setOverviewListsError('');
+
+        try {
+            const [
+                ordersResponse,
+                notifications,
+                eventsResponse,
+            ] = await Promise.all([
+                axiosInstance.get<ApiResponse<RecentOrderItem[]>>(
+                    '/admin/dashboard/recent-orders',
+                ),
+                getLatestNotifications(),
+                axiosInstance.get<ApiResponse<UpcomingEventItem[]>>(
+                    '/admin/dashboard/upcoming-events',
+                ),
+            ]);
+
+            setRecentOrders(ordersResponse.data.data || []);
+            setRecentActivities(notifications.slice(0, 5));
+            setUpcomingEvents(eventsResponse.data.data || []);
+        } catch (error) {
+            console.error(
+                'Không thể tải danh sách tổng quan',
+                error,
+            );
+
+            setOverviewListsError(
+                getErrorMessage(error),
+            );
+        } finally {
+            setLoadingOverviewLists(false);
+        }
+    };
+
+    const formatDateTime = (value: string) => {
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+
+        return date.toLocaleString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+    };
+
+    const getOrderStatusLabel = (status: string) => {
+        switch (status) {
+            case 'SUCCESS':
+                return 'Thành công';
+            case 'PENDING':
+                return 'Chờ thanh toán';
+            case 'FAILED':
+                return 'Thanh toán không hoàn tất';
+            case 'CANCELLED':
+                return 'Đã hủy';
+            default:
+                return status;
+        }
+    };
+
+    const dashboardCards = [
+        {
+            title: 'Tổng doanh thu',
+            value: dashboardSummary
+                ? formatCurrency(dashboardSummary.totalRevenue)
+                : '0 ₫',
+            icon: CircleDollarSign,
+            iconClass: 'bg-[#8B5CF6]/12 text-[#8B5CF6]',
+        },
+        {
+            title: 'Đơn thành công',
+            value: dashboardSummary
+                ? dashboardSummary.successfulOrders.toLocaleString('vi-VN')
+                : '0',
+            icon: ClipboardList,
+            iconClass: 'bg-[#2563EB]/12 text-[#2563EB]',
+        },
+        {
+            title: 'Tổng vé đã phát hành',
+            value: dashboardSummary
+                ? dashboardSummary.totalTickets.toLocaleString('vi-VN')
+                : '0',
+            icon: Ticket,
+            iconClass: 'bg-[#F43F73]/12 text-[#F43F73]',
+        },
+        {
+            title: 'Vé đã check-in',
+            value: dashboardSummary
+                ? `${dashboardSummary.checkedInTickets.toLocaleString(
+                    'vi-VN',
+                )} (${dashboardSummary.checkInRate}%)`
+                : '0 (0%)',
+            icon: UserRound,
+            iconClass: 'bg-[#22C55E]/12 text-[#16A34A]',
+        },
+    ];
 
     const [users, setUsers] = useState<UserItem[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
@@ -193,11 +405,101 @@ function AdminDashboard() {
         }
     };
 
+    const fetchDashboardSummary = async () => {
+        setLoadingDashboard(true);
+        setDashboardError('');
+
+        try {
+            const response =
+                await axiosInstance.get<ApiResponse<DashboardSummary>>(
+                    '/admin/dashboard/summary',
+                );
+
+            setDashboardSummary(response.data.data);
+        } catch (error) {
+            setDashboardError(getErrorMessage(error));
+        } finally {
+            setLoadingDashboard(false);
+        }
+    };
+
     useEffect(() => {
         if (activeMenu === 'Người dùng') {
             void fetchUsers();
         }
     }, [activeMenu]);
+
+    useEffect(() => {
+        if (activeMenu === 'Tổng quan') {
+            void fetchDashboardSummary();
+        }
+    }, [activeMenu]);
+
+    useEffect(() => {
+        if (activeMenu === 'Tổng quan') {
+            void fetchRevenueChart(revenueDays);
+        }
+    }, [activeMenu, revenueDays]);
+
+    useEffect(() => {
+        if (activeMenu === 'Tổng quan') {
+            void fetchTicketChart(ticketDays);
+        }
+    }, [activeMenu, ticketDays]);
+
+    useEffect(() => {
+        if (activeMenu === 'Tổng quan') {
+            void fetchOverviewLists();
+        }
+    }, [activeMenu]);
+
+    const fetchRevenueChart = async (days: RevenuePeriod) => {
+        setLoadingRevenue(true);
+        setRevenueError('');
+
+        try {
+            const response =
+                await axiosInstance.get<ApiResponse<RevenueChartItem[]>>(
+                    '/admin/dashboard/revenue',
+                    {
+                        params: {
+                            days,
+                        },
+                    },
+                );
+
+            setRevenueChart(response.data.data || []);
+        } catch (error) {
+            console.error('Không thể tải dữ liệu doanh thu:', error);
+            setRevenueError(getErrorMessage(error));
+        } finally {
+            setLoadingRevenue(false);
+        }
+    };
+
+    const fetchTicketChart = async (days: RevenuePeriod) => {
+        setLoadingTickets(true);
+        setTicketError('');
+
+        try {
+            const response =
+                await axiosInstance.get<ApiResponse<TicketChartItem[]>>(
+                    '/admin/dashboard/tickets',
+                    {
+                        params: {
+                            days,
+                        },
+                    },
+                );
+
+            setTicketChart(response.data.data || []);
+        } catch (error) {
+            console.error('Không thể tải dữ liệu số vé:', error);
+            setTicketError(getErrorMessage(error));
+        } finally {
+            setLoadingTickets(false);
+        }
+    };
 
     const filteredUsers = useMemo(() => {
         const text = keyword.trim().toLowerCase();
@@ -284,74 +586,308 @@ function AdminDashboard() {
                     </p>
                 </div>
 
-                <div className="mt-5 grid gap-4 xl:grid-cols-4">
-                    {statCards.map(({ title, icon: Icon, iconClass }) => (
-                        <div
-                            key={title}
-                            className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_8px_22px_rgba(15,23,42,0.05)]"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div
-                                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconClass}`}
-                                >
-                                    <Icon size={25} strokeWidth={2.2} />
-                                </div>
+                {dashboardError && (
+                    <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+                        {dashboardError}
+                    </div>
+                )}
 
-                                <div className="min-w-0">
-                                    <p className="truncate text-base font-black text-[#0B1736]">
-                                        {title}
-                                    </p>
+                {overviewListsError && (
+                    <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        Không thể tải đơn vé, hoạt động hoặc sự kiện: {overviewListsError}
+                    </div>
+                )}
 
-                                    <div className="mt-3 h-7 w-32 rounded-lg bg-[#F8FAFC]" />
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {dashboardCards.map(
+                        ({ title, value, icon: Icon, iconClass }) => (
+                            <div
+                                key={title}
+                                className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_8px_22px_rgba(15,23,42,0.05)]"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div
+                                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconClass}`}
+                                    >
+                                        <Icon size={25} strokeWidth={2.2} />
+                                    </div>
+
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-[#64748B]">
+                                            {title}
+                                        </p>
+
+                                        {loadingDashboard ? (
+                                            <div className="mt-2 h-7 w-32 animate-pulse rounded-lg bg-[#F1F5F9]" />
+                                        ) : (
+                                            <p className="mt-2 truncate text-xl font-black text-[#0B1736]">
+                                                {value}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        ),
+                    )}
                 </div>
 
                 <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px]">
                     <div className="min-w-0 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
-                        <div className="mb-4 flex items-center justify-between">
+                        <div className="mb-4 flex items-center justify-between gap-3">
                             <h3 className="text-base font-black text-[#0B1736]">
-                                Doanh thu 7 ngày gần nhất
+                                Doanh thu {revenueDays} ngày gần nhất
                             </h3>
 
-                            <button
-                                type="button"
-                                className="rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs font-bold text-[#334155]"
-                            >
-                                7 ngày
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-3 py-1.5 text-xs font-bold text-[#334155]">
+                                <CalendarDays size={14} />
+
+                                <select
+                                    value={revenueDays}
+                                    onChange={(event) =>
+                                        setRevenueDays(
+                                            Number(event.target.value) as RevenuePeriod,
+                                        )
+                                    }
+                                    disabled={loadingRevenue}
+                                    className="cursor-pointer bg-transparent font-bold text-[#334155] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                    aria-label="Chọn khoảng thời gian thống kê doanh thu"
+                                >
+                                    <option value={7}>7 ngày</option>
+                                    <option value={30}>30 ngày</option>
+                                    <option value={90}>90 ngày</option>
+                                </select>
+                            </div>
                         </div>
+
+                        {revenueError && (
+                            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
+                                {revenueError}
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-2 text-[11px] font-semibold text-[#64748B]">
                             <span className="h-2 w-5 rounded-full bg-[#F43F73]" />
                             Doanh thu
                         </div>
 
-                        <div className="mt-4 h-[205px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
+                        <div className="relative mt-4 h-[205px] min-w-0">
+                            {revenueChart.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart
+                                        data={revenueChart}
+                                        margin={{
+                                            top: 8,
+                                            right: 12,
+                                            bottom: 4,
+                                            left: 8,
+                                        }}
+                                    >
+                                        <CartesianGrid
+                                            strokeDasharray="3 3"
+                                            vertical={false}
+                                            stroke="#E2E8F0"
+                                        />
+
+                                        <XAxis
+                                            dataKey="date"
+                                            tickFormatter={formatChartDate}
+                                            tickLine={false}
+                                            axisLine={{
+                                                stroke: '#CBD5E1',
+                                            }}
+                                            tick={{
+                                                fontSize: 11,
+                                                fill: '#64748B',
+                                            }}
+                                            minTickGap={24}
+                                        />
+
+                                        <YAxis
+                                            width={58}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tick={{
+                                                fontSize: 11,
+                                                fill: '#64748B',
+                                            }}
+                                            tickFormatter={formatChartCurrency}
+                                        />
+
+                                        <Tooltip
+                                            formatter={(value) => [
+                                                `${Number(value).toLocaleString('vi-VN')} ₫`,
+                                                'Doanh thu',
+                                            ]}
+                                            labelFormatter={(label) =>
+                                                `Ngày: ${formatFullChartDate(String(label))}`
+                                            }
+                                            contentStyle={{
+                                                borderRadius: '12px',
+                                                border: '1px solid #E2E8F0',
+                                                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+                                            }}
+                                        />
+
+                                        <Line
+                                            type="monotone"
+                                            dataKey="revenue"
+                                            stroke="#F43F73"
+                                            strokeWidth={3}
+                                            dot={{
+                                                r: 4,
+                                                fill: '#FFFFFF',
+                                                stroke: '#F43F73',
+                                                strokeWidth: 3,
+                                            }}
+                                            activeDot={{
+                                                r: 6,
+                                            }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            ) : loadingRevenue ? (
+                                <div className="flex h-full items-center justify-center text-sm font-medium text-[#64748B]">
+                                    Đang tải dữ liệu doanh thu...
+                                </div>
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-sm font-medium text-[#64748B]">
+                                    Chưa có dữ liệu doanh thu
+                                </div>
+                            )}
+
+                            {loadingRevenue && revenueChart.length > 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-[1px]">
+                                    <span className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#475569] shadow">
+                                        Đang cập nhật...
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="min-w-0 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
-                        <div className="mb-4 flex items-center justify-between">
+                        <div className="mb-4 flex items-center justify-between gap-3">
                             <h3 className="text-base font-black text-[#0B1736]">
-                                Vé bán ra 7 ngày gần nhất
+                                Vé bán ra {ticketDays} ngày gần nhất
                             </h3>
 
-                            <button
-                                type="button"
-                                className="rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs font-bold text-[#334155]"
-                            >
-                                7 ngày
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-3 py-1.5 text-xs font-bold text-[#334155]">
+                                <CalendarDays size={14} />
+
+                                <select
+                                    value={ticketDays}
+                                    onChange={(event) =>
+                                        setTicketDays(
+                                            Number(event.target.value) as RevenuePeriod,
+                                        )
+                                    }
+                                    disabled={loadingTickets}
+                                    className="cursor-pointer bg-transparent font-bold text-[#334155] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                    aria-label="Chọn khoảng thời gian thống kê số vé"
+                                >
+                                    <option value={7}>7 ngày</option>
+                                    <option value={30}>30 ngày</option>
+                                    <option value={90}>90 ngày</option>
+                                </select>
+                            </div>
                         </div>
+
+                        {ticketError && (
+                            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
+                                {ticketError}
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-2 text-[11px] font-semibold text-[#64748B]">
                             <span className="h-2 w-5 rounded-full bg-[#5B35F5]" />
                             Số vé
                         </div>
 
-                        <div className="mt-4 h-[205px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
+                        <div className="relative mt-4 h-[205px] min-w-0">
+                            {ticketChart.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        data={ticketChart}
+                                        margin={{
+                                            top: 8,
+                                            right: 12,
+                                            bottom: 4,
+                                            left: 0,
+                                        }}
+                                    >
+                                        <CartesianGrid
+                                            strokeDasharray="3 3"
+                                            vertical={false}
+                                            stroke="#E2E8F0"
+                                        />
+
+                                        <XAxis
+                                            dataKey="date"
+                                            tickFormatter={formatChartDate}
+                                            tickLine={false}
+                                            axisLine={{
+                                                stroke: '#CBD5E1',
+                                            }}
+                                            tick={{
+                                                fontSize: 11,
+                                                fill: '#64748B',
+                                            }}
+                                            minTickGap={24}
+                                        />
+
+                                        <YAxis
+                                            allowDecimals={false}
+                                            width={32}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tick={{
+                                                fontSize: 11,
+                                                fill: '#64748B',
+                                            }}
+                                        />
+
+                                        <Tooltip
+                                            formatter={(value) => [
+                                                `${Number(value).toLocaleString('vi-VN')} vé`,
+                                                'Số vé',
+                                            ]}
+                                            labelFormatter={(label) =>
+                                                `Ngày: ${formatFullChartDate(String(label))}`
+                                            }
+                                            contentStyle={{
+                                                borderRadius: '12px',
+                                                border: '1px solid #E2E8F0',
+                                                boxShadow:
+                                                    '0 8px 24px rgba(15, 23, 42, 0.08)',
+                                            }}
+                                        />
+
+                                        <Bar
+                                            dataKey="ticketCount"
+                                            fill="#5B35F5"
+                                            radius={[6, 6, 0, 0]}
+                                            maxBarSize={34}
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : loadingTickets ? (
+                                <div className="flex h-full items-center justify-center text-sm font-medium text-[#64748B]">
+                                    Đang tải dữ liệu số vé...
+                                </div>
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-sm font-medium text-[#64748B]">
+                                    Chưa có dữ liệu số vé
+                                </div>
+                            )}
+
+                            {loadingTickets && ticketChart.length > 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-[1px]">
+                                    <span className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#475569] shadow">
+                                        Đang cập nhật...
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="min-w-0 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
@@ -359,16 +895,49 @@ function AdminDashboard() {
                             <h3 className="text-base font-black text-[#0B1736]">
                                 Thông báo & Hoạt động
                             </h3>
-
-                            <button
-                                type="button"
-                                className="text-xs font-black text-[#F43F73]"
-                            >
-                                Xem tất cả
-                            </button>
                         </div>
 
-                        <div className="h-[232px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
+                        <div className="h-[232px] overflow-y-auto rounded-xl border border-[#E2E8F0] bg-white">
+                            {loadingOverviewLists ? (
+                                <div className="space-y-3 p-4">
+                                    {[1, 2, 3].map((item) => (
+                                        <div
+                                            key={item}
+                                            className="h-14 animate-pulse rounded-lg bg-[#F1F5F9]"
+                                        />
+                                    ))}
+                                </div>
+                            ) : recentActivities.length === 0 ? (
+                                <div className="flex h-full items-center justify-center text-sm font-semibold text-[#94A3B8]">
+                                    Chưa có hoạt động
+                                </div>
+                            ) : (
+                                recentActivities.map((activity) => (
+                                    <div
+                                        key={activity.id}
+                                        className="flex gap-3 border-b border-[#F1F5F9] p-3 last:border-0"
+                                    >
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1F5] text-[#F43F73]">
+                                            <Bell size={17} />
+                                        </div>
+
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-xs font-black text-[#0B1736]">
+                                                {activity.title}
+                                            </p>
+
+                                            <p className="mt-1 line-clamp-2 text-[11px] font-medium text-[#64748B]">
+                                                {activity.message}
+                                            </p>
+
+                                            <p className="mt-1 text-[10px] font-semibold text-[#94A3B8]">
+                                                {formatDateTime(activity.createdAt)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -382,6 +951,7 @@ function AdminDashboard() {
                             <button
                                 type="button"
                                 className="text-xs font-black text-[#F43F73]"
+                                onClick={() => setActiveMenu('Đơn vé')}
                             >
                                 Xem tất cả ›
                             </button>
@@ -401,13 +971,59 @@ function AdminDashboard() {
                                     </tr>
                                 </thead>
 
-                            <tbody>
-                                <tr>
-                                    <td colSpan={7}>
-                                        <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
-                                    </td>
-                                </tr>
-                            </tbody>
+                                <tbody>
+                                    {loadingOverviewLists ? (
+                                        <tr>
+                                            <td colSpan={7} className="py-8 text-center">
+                                                Đang tải...
+                                            </td>
+                                        </tr>
+                                    ) : recentOrders.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={7}
+                                                className="py-8 text-center font-semibold text-[#94A3B8]"
+                                            >
+                                                Chưa có đơn vé
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        recentOrders.map((order) => (
+                                            <tr
+                                                key={order.orderCode}
+                                                className="border-b border-[#F1F5F9]"
+                                            >
+                                                <td className="py-3 font-bold">
+                                                    #{order.orderCode}
+                                                </td>
+
+                                                <td className="truncate py-3">
+                                                    {order.eventName}
+                                                </td>
+
+                                                <td className="truncate py-3">
+                                                    {order.customerName || 'Khách hàng'}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {order.totalTickets}
+                                                </td>
+
+                                                <td className="py-3 font-bold text-[#F43F73]">
+                                                    {formatCurrency(order.totalAmount)}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {getOrderStatusLabel(order.status)}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {formatDateTime(order.createdAt)}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
                         </table>
                         </div>
                     </div>
@@ -421,6 +1037,7 @@ function AdminDashboard() {
                             <button
                                 type="button"
                                 className="text-xs font-black text-[#F43F73]"
+                                onClick={() => setActiveMenu('Sự kiện')}
                             >
                                 Xem tất cả ›
                             </button>
@@ -439,13 +1056,57 @@ function AdminDashboard() {
                                     </tr>
                                 </thead>
 
-                            <tbody>
-                                <tr>
-                                    <td colSpan={6}>
-                                        <div className="mt-4 h-[190px] rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC]" />
-                                    </td>
-                                </tr>
-                            </tbody>
+                                <tbody>
+                                    {loadingOverviewLists ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-8 text-center">
+                                                Đang tải...
+                                            </td>
+                                        </tr>
+                                    ) : upcomingEvents.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={6}
+                                                className="py-8 text-center font-semibold text-[#94A3B8]"
+                                            >
+                                                Chưa có sự kiện sắp diễn ra
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        upcomingEvents.map((event) => (
+                                            <tr
+                                                key={event.id}
+                                                className="border-b border-[#F1F5F9]"
+                                            >
+                                                <td className="truncate py-3 font-bold">
+                                                    {event.name}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {formatDateTime(event.startTime)}
+                                                </td>
+
+                                                <td className="truncate py-3">
+                                                    {event.venueName || event.city || 'Chưa cập nhật'}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {event.soldTickets}/{event.totalCapacity}
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {event.salesRate}%
+                                                </td>
+
+                                                <td className="py-3">
+                                                    {event.status === 'ONGOING'
+                                                        ? 'Đang diễn ra'
+                                                        : 'Sắp diễn ra'}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -802,6 +1463,9 @@ function AdminDashboard() {
         if (activeMenu === 'Tổng quan') {
             return renderOverview();
         }
+        if (activeMenu === 'Check-in') {
+            return <AdminCheckIn />;
+        }
         if (activeMenu === 'Người dùng') {
             return renderUsers();
         }
@@ -811,11 +1475,14 @@ function AdminDashboard() {
         if (activeMenu === 'Đơn vé') {
             return <AdminOrders />;
         }
+        if (activeMenu === 'Báo cáo') {
+            return <AdminReports />;
+        }
         return renderPlaceholder();
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#0B1736] overflow-x-hidden">
+        <div className="min-h-screen bg-[#F8FAFC] pt-[76px] font-sans text-[#0B1736] overflow-x-hidden">
             <header className="fixed left-0 right-0 top-0 z-50 flex h-[76px] items-center justify-between border-b border-white/10 bg-[#061A35] px-4 sm:px-8 text-white shadow-[0_6px_18px_rgba(15,23,42,0.14)]">
                 <div className="flex items-center gap-3">
                     <button 
@@ -832,17 +1499,7 @@ function AdminDashboard() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                    <button
-                        type="button"
-                        className="relative flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-                        aria-label="Thông báo"
-                    >
-                        <Bell size={22} strokeWidth={2.2} />
-
-                        <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F43F73] px-1.5 text-xs font-black text-white">
-                            8
-                        </span>
-                    </button>
+                    <NotificationBell variant="admin" />
 
                     <div className="relative">
                         <button
@@ -949,7 +1606,7 @@ function AdminDashboard() {
                 </div>
             </aside>
 
-            <main className="lg:ml-[240px] min-h-screen bg-[#F8FAFC] p-4 sm:p-6 pt-[100px]">
+            <main className="min-h-[calc(100vh-76px)] bg-[#F8FAFC] p-4 sm:p-6 lg:ml-[240px]">
                 {renderContent()}
             </main>
         </div>

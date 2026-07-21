@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const mockFeaturedNews = {
     id: '1',
