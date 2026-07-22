@@ -40,6 +40,7 @@ public class PaymentService {
     private final EmailService emailService;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final PayPalService paypalService;
 
     public String createPaymentLink(Order order, String returnUrl, String cancelUrl) throws Exception {
         String eventName = "Sự kiện N3V";
@@ -133,9 +134,7 @@ public class PaymentService {
     }
 
     /**
-     * Chủ động hỏi PayOS khi người mua mở trang trạng thái đơn hàng.
-     * Đây là đường dự phòng bắt buộc khi chạy backend ở localhost vì
-     * máy chủ PayOS thường không thể gọi webhook vào localhost.
+     * Chủ động hỏi đối soát khi người mua mở trang trạng thái đơn hàng.
      */
     @Transactional
     public void reconcileOrderPayment(
@@ -156,6 +155,19 @@ public class PaymentService {
                 .orElse(null);
 
         if (payment == null || isAlreadyCompleted(payment)) {
+            return;
+        }
+
+        if (payment.getPaymentMethod() == PaymentMethod.PAYPAL) {
+            try {
+                paypalService.capturePayment(payment.getTransactionId());
+            } catch (Exception exception) {
+                log.warn("Chưa thể đối soát PayPal cho đơn hàng {}", orderCode, exception);
+            }
+            return;
+        }
+
+        if (payment.getPaymentMethod() != PaymentMethod.PAYOS) {
             return;
         }
 

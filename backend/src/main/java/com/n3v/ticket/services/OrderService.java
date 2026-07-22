@@ -306,6 +306,10 @@ public class OrderService {
             return true;
         }
 
+        if (payment.getPaymentMethod() != com.n3v.ticket.enums.PaymentMethod.PAYOS) {
+            return false;
+        }
+
         try {
             long payOsOrderCode = Long.parseLong(
                     payment.getTransactionId()
