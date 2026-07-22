@@ -5,6 +5,8 @@ import { formatCurrency, formatDateTime } from '../utils/format';
 import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
 
 
+import { createCheckout, createCheckoutPaypal } from '../api/bookingApi';
+
 function Checkout() {
     const location = useLocation();
     const navigate = useNavigate();
@@ -15,10 +17,12 @@ function Checkout() {
         total?: number;
         orderCode?: string;
         checkoutUrl?: string;
+        payload?: any;
     };
 
     const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
-    const [loading] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'PAYOS' | 'PAYPAL'>('PAYOS');
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -50,10 +54,34 @@ function Checkout() {
     const totalTickets = (selectedSeats?.length || 0) + (selectedZones?.reduce((acc, curr) => acc + curr.quantity, 0) || 0);
 
     const handlePayment = async () => {
-        if (state.checkoutUrl) {
-            window.location.href = state.checkoutUrl;
-        } else {
-            setError('Không tìm thấy link thanh toán, vui lòng đặt lại vé.');
+        setLoading(true);
+        setError('');
+        try {
+            if (state.payload) {
+                if (paymentMethod === 'PAYOS') {
+                    const res = await createCheckout(state.payload);
+                    if (res.checkoutUrl) {
+                        window.location.href = res.checkoutUrl;
+                    } else {
+                        setError('Không nhận được liên kết thanh toán PayOS.');
+                    }
+                } else if (paymentMethod === 'PAYPAL') {
+                    const res = await createCheckoutPaypal(state.payload);
+                    if (res.checkoutUrl) {
+                        window.location.href = res.checkoutUrl;
+                    } else {
+                        setError('Không nhận được liên kết thanh toán PayPal.');
+                    }
+                }
+            } else if (state.checkoutUrl) {
+                window.location.href = state.checkoutUrl;
+            } else {
+                setError('Không tìm thấy thông tin đặt vé, vui lòng chọn lại.');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Có lỗi xảy ra khi khởi tạo thanh toán.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -117,18 +145,62 @@ function Checkout() {
                                 <CreditCard size={20} className="text-[#6D28D9]" />
                                 Phương thức thanh toán
                             </h2>
-                            <label className="flex cursor-pointer items-center justify-between rounded-xl border-2 border-[#F43F73] bg-[#F43F73]/5 p-4 transition-colors">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm">
-                                        <img src="https://payos.vn/wp-content/uploads/sites/13/2023/07/payos-logo.svg" alt="PayOS" className="h-6" />
+                            
+                            <div className="space-y-3">
+                                {/* PayOS Option */}
+                                <label
+                                    onClick={() => setPaymentMethod('PAYOS')}
+                                    className={`flex cursor-pointer items-center justify-between rounded-xl border-2 p-4 transition-colors ${
+                                        paymentMethod === 'PAYOS'
+                                            ? 'border-[#F43F73] bg-[#F43F73]/5'
+                                            : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm border border-slate-100">
+                                            <img src="https://payos.vn/wp-content/uploads/sites/13/2023/07/payos-logo.svg" alt="PayOS" className="h-6" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-[#0B1736]">Thanh toán qua PayOS</p>
+                                            <p className="text-xs text-[#64748B]">Hỗ trợ quét mã QR VietQR miễn phí</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-[#0B1736]">Thanh toán qua PayOS</p>
-                                        <p className="text-xs text-[#64748B]">Hỗ trợ quét mã QR VietQR miễn phí</p>
+                                    <input
+                                        type="radio"
+                                        name="payment"
+                                        checked={paymentMethod === 'PAYOS'}
+                                        onChange={() => setPaymentMethod('PAYOS')}
+                                        className="h-5 w-5 accent-[#F43F73]"
+                                    />
+                                </label>
+
+                                {/* PayPal Option */}
+                                <label
+                                    onClick={() => setPaymentMethod('PAYPAL')}
+                                    className={`flex cursor-pointer items-center justify-between rounded-xl border-2 p-4 transition-colors ${
+                                        paymentMethod === 'PAYPAL'
+                                            ? 'border-[#0070BA] bg-[#0070BA]/5'
+                                            : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm border border-slate-100 p-1">
+                                            <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.prod.png" alt="PayPal" className="h-5 object-contain" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-[#0B1736]">Thanh toán qua PayPal</p>
+                                            <p className="text-xs text-[#64748B]">Thanh toán quốc tế an toàn (Thẻ Visa/Mastercard, PayPal Sandbox)</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <input type="radio" name="payment" checked readOnly className="h-5 w-5 accent-[#F43F73]" />
-                            </label>
+                                    <input
+                                        type="radio"
+                                        name="payment"
+                                        checked={paymentMethod === 'PAYPAL'}
+                                        onChange={() => setPaymentMethod('PAYPAL')}
+                                        className="h-5 w-5 accent-[#0070BA]"
+                                    />
+                                </label>
+                            </div>
                         </div>
 
                     </div>

@@ -6,6 +6,7 @@ import com.n3v.ticket.entities.Order;
 import com.n3v.ticket.entities.User;
 import com.n3v.ticket.repositories.UserRepository;
 import com.n3v.ticket.services.OrderService;
+import com.n3v.ticket.services.PayPalService;
 import com.n3v.ticket.services.PaymentService;
 import com.n3v.ticket.dto.CheckoutRequest;
 import com.n3v.ticket.dto.order.OrderStatusResponse;
@@ -26,6 +27,7 @@ import java.util.Map;
 public class OrderController {
     private final OrderService orderService;
     private final PaymentService paymentService;
+    private final PayPalService paypalService;
     private final UserRepository userRepository;
 
     @Value("${FRONTEND_BASE_URL:http://localhost:5173}")
@@ -56,6 +58,53 @@ public class OrderController {
                     "Không thể tạo liên kết thanh toán PayOS"
             );
         }
+    }
+
+    @PostMapping("/checkout-paypal")
+    public ApiResponse<?> checkoutPaypal(
+            Authentication auth,
+            @Valid @RequestBody CheckoutRequest request
+    ) {
+        User user = getCurrentUser(auth);
+        Order order = orderService.createOrder(user, request);
+
+        String statusUrl = frontendBaseUrl
+                + "/booking-status/"
+                + order.getOrderCode();
+
+        try {
+            String approveUrl = paypalService.createPaymentLink(order, statusUrl, statusUrl);
+
+            return ApiResponse.success("Tạo đơn hàng PayPal thành công", Map.of(
+                    "orderCode", order.getOrderCode(),
+                    "checkoutUrl", approveUrl
+            ));
+        } catch (Exception e) {
+            orderService.markOrderFailed(order.getOrderCode());
+            throw new BadRequestException(
+                    "Không thể tạo liên kết thanh toán PayPal"
+            );
+        }
+    }
+
+    @PostMapping("/paypal/capture")
+    public ApiResponse<?> capturePaypal(
+            @RequestBody(required = false) Map<String, String> body,
+            @RequestParam(name = "paypalOrderId", required = false) String paypalOrderIdParam
+    ) {
+        String paypalOrderId = paypalOrderIdParam;
+        if (paypalOrderId == null && body != null) {
+            paypalOrderId = body.get("paypalOrderId");
+            if (paypalOrderId == null) {
+                paypalOrderId = body.get("token");
+            }
+        }
+        if (paypalOrderId == null || paypalOrderId.isBlank()) {
+            throw new BadRequestException("Thiếu paypalOrderId");
+        }
+
+        paypalService.capturePayment(paypalOrderId);
+        return ApiResponse.success("Xác nhận thanh toán PayPal thành công", null);
     }
 
     @GetMapping("/{orderCode}/status")

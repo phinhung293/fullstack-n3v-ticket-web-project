@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, MapPin, MousePointerClick, Ticket } from 'lucide-react';
 import SeatMap from '../components/events/SeatMap';
 import ZoneQuantitySelector from '../components/events/ZoneQuantitySelector';
 import { getEventApiErrorMessage, getPublicEventById, getPublicZoneSeats } from '../api/eventApi';
-import { createCheckout } from '../api/bookingApi';
 import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
 import {
     canPurchase,
@@ -22,8 +21,6 @@ function EventDetail() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showPicker, setShowPicker] = useState(false);
-    const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-    const creatingOrderRef = useRef(false);
     // zoneId -> danh sách ghế/bàn của zone đó (SEAT_MAP / TEA_LOUNGE)
     const [seatsByZone, setSeatsByZone] = useState<Record<number, EventSeatResponse[]>>({});
     const [seatsLoading, setSeatsLoading] = useState(false);
@@ -89,86 +86,48 @@ function EventDetail() {
     // Tất cả ghế/bàn (SEAT_MAP hoặc TEA_LOUNGE) của các zone đã tải, gộp lại cho SeatMap.
     const allSeats = activeZones.flatMap((z) => seatsByZone[z.id] || []);
 
-    const handleBuySeats = async (
+    const handleBuySeats = (
         selectedSeats: EventSeatResponse[],
         total: number,
     ) => {
-        if (creatingOrderRef.current) return;
+        const payload = {
+            seatIds: selectedSeats.map((seat) => seat.id),
+            zones: [],
+        };
 
-        creatingOrderRef.current = true;
-        setIsCreatingOrder(true);
-        setError('');
-
-        try {
-            const payload = {
-                seatIds: selectedSeats.map((seat) => seat.id),
-                zones: [],
-            };
-
-            const response = await createCheckout(payload);
-
-            navigate('/checkout', {
-                state: {
-                    event,
-                    selectedSeats,
-                    total,
-                    orderCode: response.orderCode,
-                    checkoutUrl: response.checkoutUrl,
-                },
-            });
-        } catch (err: any) {
-            setError(
-                err.response?.data?.message ||
-                'Có lỗi xảy ra khi tạo đơn hàng',
-            );
-        } finally {
-            creatingOrderRef.current = false;
-            setIsCreatingOrder(false);
-        }
+        navigate('/checkout', {
+            state: {
+                event,
+                selectedSeats,
+                total,
+                payload,
+            },
+        });
     };
 
-    const handleBuyZones = async (
+    const handleBuyZones = (
         selections: {
             zone: EventZoneResponse;
             quantity: number;
         }[],
         total: number,
     ) => {
-        if (creatingOrderRef.current) return;
+        const payload = {
+            seatIds: [],
+            zones: selections.map((selection) => ({
+                zoneId: selection.zone.id,
+                quantity: selection.quantity,
+            })),
+        };
 
-        creatingOrderRef.current = true;
-        setIsCreatingOrder(true);
-        setError('');
-
-        try {
-            const payload = {
-                seatIds: [],
-                zones: selections.map((selection) => ({
-                    zoneId: selection.zone.id,
-                    quantity: selection.quantity,
-                })),
-            };
-
-            const response = await createCheckout(payload);
-
-            navigate('/checkout', {
-                state: {
-                    event,
-                    selectedZones: selections,
-                    total,
-                    orderCode: response.orderCode,
-                    checkoutUrl: response.checkoutUrl,
-                },
-            });
-        } catch (err: any) {
-            setError(
-                err.response?.data?.message ||
-                'Có lỗi xảy ra khi tạo đơn hàng',
-            );
-        } finally {
-            creatingOrderRef.current = false;
-            setIsCreatingOrder(false);
-        }
+        navigate('/checkout', {
+            state: {
+                event,
+                selectedZones: selections,
+                total,
+                payload,
+            },
+        });
     };
 
     const pickerLabel = event.ticketMapType === 'ZONE' ? 'Chọn vé' : 'Chọn vị trí';
@@ -288,16 +247,6 @@ function EventDetail() {
                     )}
                 </aside>
             </section>
-
-            {/* Loading Overlay */}
-            {isCreatingOrder && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#F43F73] border-t-transparent"></div>
-                        <p className="font-bold text-[#0B1736]">Đang tạo đơn hàng, vui lòng đợi...</p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../api/apiClient';
+import { capturePaypalOrder } from '../api/bookingApi';
 
 type ApiResponse<T> = {
     code: number;
@@ -35,6 +36,7 @@ function BookingStatus() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
+    const paypalToken = searchParams.get('token');
     const returnedAsCancelled =
         searchParams.get('cancel') === 'true' ||
         searchParams.get('status') === 'CANCELLED';
@@ -69,6 +71,15 @@ function BookingStatus() {
 
         const checkUntilFinished = async () => {
             try {
+                if (paypalToken && !returnedAsCancelled) {
+                    try {
+                        await capturePaypalOrder(paypalToken);
+                    } catch (captureErr) {
+                        // Idempotency: nếu đã capture thành công hoặc có lỗi nhẹ thì vẫn tiếp tục kiểm tra order status
+                        console.warn('Capture PayPal order warning:', captureErr);
+                    }
+                }
+
                 const currentStatus = await loadStatus();
 
                 if (cancelled || !currentStatus) {
@@ -116,7 +127,7 @@ function BookingStatus() {
                 window.clearTimeout(timeoutId);
             }
         };
-    }, [loadStatus, navigate, orderCode, returnedAsCancelled]);
+    }, [loadStatus, navigate, orderCode, paypalToken, returnedAsCancelled]);
 
     const checkAgain = async () => {
         setChecking(true);
@@ -164,7 +175,7 @@ function BookingStatus() {
 
                             <p className="mt-4 text-sm font-medium leading-relaxed text-[#475569]">
                                 Đơn hàng <span className="font-bold text-[#0B1736]">#{orderCode}</span>{' '}
-                                đã được PayOS xác nhận. Vé điện tử của bạn đã sẵn sàng.
+                                đã được xác nhận thanh toán thành công. Vé điện tử của bạn đã sẵn sàng.
                             </p>
 
                             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -197,7 +208,7 @@ function BookingStatus() {
 
                             <p className="mt-4 text-sm font-medium leading-relaxed text-[#475569]">
                                 Đơn hàng <span className="font-bold text-[#0B1736]">#{orderCode}</span>{' '}
-                                đã bị hủy hoặc chưa được PayOS xác nhận thanh toán.
+                                đã bị hủy hoặc chưa được xác nhận thanh toán.
                             </p>
 
                             <Link
@@ -223,7 +234,7 @@ function BookingStatus() {
                             </h1>
 
                             <p className="mt-4 text-sm font-medium leading-relaxed text-[#475569]">
-                                Hệ thống đang chờ webhook PayOS cho đơn{' '}
+                                Hệ thống đang kiểm tra và xác nhận thanh toán cho đơn hàng{' '}
                                 <span className="font-bold text-[#0B1736]">#{orderCode}</span>.
                                 Không đóng trang hoặc thanh toán lại đơn này.
                             </p>
