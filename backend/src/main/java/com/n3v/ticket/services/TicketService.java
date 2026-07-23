@@ -254,11 +254,15 @@ public class TicketService {
         Event event = ticket.getEvent();
         EventZone eventZone = ticket.getEventZone();
         EventSeat seat = ticket.getSeat();
+        TicketStatus effectiveStatus = resolveEffectiveStatus(
+                ticket,
+                LocalDateTime.now(VIETNAM_ZONE)
+        );
 
         return TicketResponse.builder()
                 .id(ticket.getId())
                 .ticketCode(ticket.getTicketCode())
-                .status(ticket.getStatus().name())
+                .status(effectiveStatus.name())
 
                 .eventName(event != null ? event.getName() : null)
                 .eventThumbnail(
@@ -273,6 +277,10 @@ public class TicketService {
                 .eventStartTime(
                         event != null ? event.getStartTime() : null
                 )
+                .eventEndTime(
+                        event != null ? event.getEndTime() : null
+                )
+                .qrAvailable(effectiveStatus == TicketStatus.ISSUED)
 
                 .zoneName(
                         eventZone != null ? eventZone.getZoneName() : null
@@ -306,6 +314,17 @@ public class TicketService {
 
             throw new AccessDeniedException(
                     "Bạn không có quyền xem mã QR của vé này"
+            );
+        }
+
+        TicketStatus effectiveStatus = resolveEffectiveStatus(
+                ticket,
+                LocalDateTime.now(VIETNAM_ZONE)
+        );
+
+        if (effectiveStatus != TicketStatus.ISSUED) {
+            throw new BadRequestException(
+                    buildQrUnavailableMessage(effectiveStatus)
             );
         }
 
@@ -602,7 +621,7 @@ public class TicketService {
             return CheckInWindowStatus.NOT_OPEN;
         }
 
-        if (now.isAfter(closeAt)) {
+        if (!now.isBefore(closeAt)) {
             return CheckInWindowStatus.CLOSED;
         }
 
@@ -617,5 +636,37 @@ public class TicketService {
                     exception.getMessage()
             );
         }
+    }
+
+    TicketStatus resolveEffectiveStatus(
+            ETicket ticket,
+            LocalDateTime now
+    ) {
+        if (ticket.getStatus() != TicketStatus.ISSUED) {
+            return ticket.getStatus();
+        }
+
+        Event event = ticket.getEvent();
+
+        if (event != null && event.getStatus() == EventStatus.CANCELLED) {
+            return TicketStatus.CANCELLED;
+        }
+
+        if (event != null
+                && event.getEndTime() != null
+                && !now.isBefore(event.getEndTime())) {
+            return TicketStatus.EXPIRED;
+        }
+
+        return TicketStatus.ISSUED;
+    }
+
+    private String buildQrUnavailableMessage(TicketStatus status) {
+        return switch (status) {
+            case CHECKED_IN -> "Vé đã được check-in và không thể sử dụng lại";
+            case CANCELLED -> "Vé đã bị hủy và không còn sử dụng được";
+            case EXPIRED -> "Vé đã quá hạn và không còn sử dụng được";
+            default -> "Vé không còn hiệu lực";
+        };
     }
 }

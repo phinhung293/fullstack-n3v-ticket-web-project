@@ -1,6 +1,7 @@
 export type NotificationType =
     | 'PAYMENT_SUCCESS'
     | 'TICKET_CHECKED_IN'
+    | 'TICKET_EXPIRED'
     | 'EVENT_REMINDER'
     | 'EVENT_CANCELLED'
     | 'EVENT_RESCHEDULED'

@@ -20,6 +20,8 @@ public class TicketResponse {
     private String address;
 
     private LocalDateTime eventStartTime;
+    private LocalDateTime eventEndTime;
+    private boolean qrAvailable;
 
     private String zoneName;
     private String seatCode;
