@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, MapPin, MousePointerClick, Ticket } from 'lucide-react';
 import SeatMap from '../components/events/SeatMap';
 import ZoneQuantitySelector from '../components/events/ZoneQuantitySelector';
-import { getEventApiErrorMessage, getPublicEventById, getPublicZoneSeats } from '../api/eventApi';
+import { getEventApiErrorMessage, getPublicEventById, getPublicZoneSeats, toAbsoluteImageUrl } from '../api/eventApi';
 import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
 import {
     canPurchase,
@@ -109,7 +109,7 @@ function EventDetail() {
         <div className="bg-white">
             <div className="relative aspect-[16/6] w-full overflow-hidden bg-[#0B1736] sm:aspect-[16/5]">
                 <img
-                    src={event.bannerUrl || event.thumbnailUrl || undefined}
+                    src={toAbsoluteImageUrl(event.bannerUrl || event.thumbnailUrl)}
                     alt={event.name}
                     className={`h-full w-full object-cover opacity-80 ${displayStatus === 'EXPIRED' || displayStatus === 'COMPLETED' ? 'grayscale' : ''
                         }`}

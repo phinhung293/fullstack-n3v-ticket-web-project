@@ -8,6 +8,7 @@ import {
     Plus,
     Rocket,
     Trash2,
+    Undo2,
     X,
 } from 'lucide-react';
 import {
@@ -56,6 +57,7 @@ function AdminEventConfigure({ eventId, onBack }: Props) {
     const [savingZone, setSavingZone] = useState(false);
 
     const [publishing, setPublishing] = useState(false);
+    const [reverting, setReverting] = useState(false);
 
     const isZoneOnly = event?.ticketMapType === 'ZONE';
 
@@ -162,6 +164,25 @@ function AdminEventConfigure({ eventId, onBack }: Props) {
         }
     };
 
+    // Gỡ công khai: PUBLISHED -> DRAFT. Dùng khi thông tin/khu vực bị nhập sai và cần
+    // sửa lại từ đầu, hoặc muốn xóa hẳn sự kiện (chỉ xóa được khi đang ở DRAFT).
+    const handleRevertToDraft = async () => {
+        if (!event) return;
+        if (!window.confirm('Gỡ công khai và chuyển sự kiện về trạng thái Nháp? Khách sẽ không còn xem/đặt vé được nữa cho tới khi bạn Công khai lại.')) return;
+        setReverting(true);
+        setError('');
+        setNotice('');
+        try {
+            await adminChangeEventStatus(eventId, 'DRAFT');
+            setNotice('Đã chuyển sự kiện về Nháp. Bạn có thể sửa thông tin hoặc xóa sự kiện này.');
+            await loadEvent();
+        } catch (err) {
+            setError(getEventApiErrorMessage(err));
+        } finally {
+            setReverting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex h-[400px] items-center justify-center rounded-2xl bg-white shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
@@ -219,6 +240,18 @@ function AdminEventConfigure({ eventId, onBack }: Props) {
                         >
                             <Rocket size={16} />
                             {publishing ? 'Đang công khai...' : 'Công khai sự kiện'}
+                        </button>
+                    )}
+                    {event.status === 'PUBLISHED' && (
+                        <button
+                            type="button"
+                            onClick={handleRevertToDraft}
+                            disabled={reverting}
+                            title="Gỡ công khai, chuyển về Nháp để sửa thông tin hoặc xóa sự kiện"
+                            className="flex h-10 items-center gap-2 rounded-lg border border-[#DDE3EF] px-4 text-sm font-black text-[#334155] transition hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <Undo2 size={16} />
+                            {reverting ? 'Đang chuyển...' : 'Gỡ công khai (về Nháp)'}
                         </button>
                     )}
                     {(event.status === 'PUBLISHED' || event.status === 'DRAFT') && (

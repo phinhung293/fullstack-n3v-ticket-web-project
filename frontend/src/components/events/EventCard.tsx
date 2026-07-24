@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react';
 import type { EventSummaryResponse } from '../../types/event';
 import { formatCurrency, formatShortDate } from '../../utils/format';
 import { DISPLAY_STATUS_BADGE_CLASS, DISPLAY_STATUS_LABEL, getDisplayStatus } from '../../utils/eventStatus';
+import { toAbsoluteImageUrl } from '../../api/eventApi';
 
 function EventCard({ event }: { event: EventSummaryResponse }) {
     const { day, month } = formatShortDate(event.startTime);
@@ -16,7 +17,7 @@ function EventCard({ event }: { event: EventSummaryResponse }) {
             <div className="relative aspect-video w-full overflow-hidden bg-[#0B1736]">
                 {event.thumbnailUrl ? (
                     <img
-                        src={event.thumbnailUrl}
+                        src={toAbsoluteImageUrl(event.thumbnailUrl)}
                         alt={event.name}
                         className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${displayStatus === 'EXPIRED' || displayStatus === 'COMPLETED' ? 'grayscale' : ''
                             }`}

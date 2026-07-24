@@ -4,6 +4,7 @@ export type EventStatus = 'DRAFT' | 'PUBLISHED' | 'ONGOING' | 'COMPLETED' | 'CAN
 export type TicketMapType = 'SEAT_MAP' | 'ZONE' | 'TEA_LOUNGE';
 export type SeatType = 'SEAT' | 'TABLE';
 export type SeatStatus = 'AVAILABLE' | 'LOCKED' | 'SOLD' | 'DISABLED';
+export type SeatTier = 'VIP' | 'STANDARD';
 
 export type ApiResponse<T> = {
     code: number;
@@ -43,6 +44,7 @@ export type EventSeatResponse = {
     id: number;
     zoneId: number;
     seatType: SeatType;
+    seatTier: SeatTier;
     seatRow?: string | null;
     seatColumn?: number | null;
     seatCode: string;
@@ -64,7 +66,7 @@ export type EventSeatRequest = {
 export type SeatBulkGenerateRequest = {
     rows: string[];
     columnsPerRow: number;
-    seatTier: 'VIP' | 'STANDARD';
+    seatTier: SeatTier;
 };
 
 export type EventZoneResponse = {
@@ -142,10 +144,9 @@ export type EventCreateRequest = {
     saleStartTime?: string;
     saleEndTime?: string;
     ticketMapType: TicketMapType;
-    createdBy?: number;
 };
 
-export type EventUpdateRequest = Omit<EventCreateRequest, 'ticketMapType' | 'createdBy'>;
+export type EventUpdateRequest = Omit<EventCreateRequest, 'ticketMapType'>;
 
 export type EventStatusUpdateRequest = {
     status: EventStatus;
