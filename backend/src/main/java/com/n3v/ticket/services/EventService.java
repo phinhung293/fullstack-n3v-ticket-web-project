@@ -14,6 +14,7 @@ import com.n3v.ticket.enums.EventStatus;
 import com.n3v.ticket.enums.TicketMapType;
 import com.n3v.ticket.repositories.CategoryRepository;
 import com.n3v.ticket.repositories.EventRepository;
+import com.n3v.ticket.repositories.UserRepository;
 import com.n3v.ticket.specifications.EventSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,6 +34,7 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final CategoryRepository categoryRepository;
+    private final UserRepository userRepository;
 
     /**
      * Bang trang thai duoc phep chuyen toi. Dat o day de de doc/de test,
@@ -59,11 +61,30 @@ public class EventService {
         }
     }
 
+    /** Dong ban ve khong duoc muon hon thoi gian ket thuc su kien. */
+    private void validateSaleEndTime(LocalDateTime saleEndTime, LocalDateTime endTime) {
+        if (saleEndTime != null && endTime != null && saleEndTime.isAfter(endTime)) {
+            throw new BadRequestException("Thoi gian dong ban ve khong duoc muon hon thoi gian ket thuc su kien");
+        }
+    }
+
+    /** Chi ap dung khi TAO MOI: khong cho startTime/endTime la ngay trong qua khu. Khi SUA,
+     *  su kien co the dang ONGOING (da bat dau that su) nen khong ap dung rule nay. */
+    private void validateNotInPast(LocalDateTime start, LocalDateTime end) {
+        LocalDateTime now = LocalDateTime.now();
+        if (start != null && start.isBefore(now)) {
+            throw new BadRequestException("Thoi gian bat dau khong duoc la ngay trong qua khu");
+        }
+        if (end != null && end.isBefore(now)) {
+            throw new BadRequestException("Thoi gian ket thuc khong duoc la ngay trong qua khu");
+        }
+    }
+
     /** Danh sach cong khai cho khach - chi thay PUBLISHED/ONGOING, va AN Event da het han mua ve. */
     public Page<EventSummaryResponse> searchPublic(String keyword, Long categoryId, String city,
-                                                     TicketMapType ticketMapType,
-                                                     LocalDateTime from, LocalDateTime to,
-                                                     Pageable pageable) {
+                                                   TicketMapType ticketMapType,
+                                                   LocalDateTime from, LocalDateTime to,
+                                                   Pageable pageable) {
         var spec = EventSpecification.build(
                 keyword, categoryId, city,
                 null, List.of(EventStatus.PUBLISHED, EventStatus.ONGOING),
@@ -75,9 +96,9 @@ public class EventService {
 
     /** Danh sach cho admin - xem duoc tat ca status (ke ca da het han mua ve), filter them theo status cu the. */
     public Page<EventSummaryResponse> searchAdmin(String keyword, Long categoryId, String city,
-                                                    EventStatus status, TicketMapType ticketMapType,
-                                                    LocalDateTime from, LocalDateTime to,
-                                                    Pageable pageable) {
+                                                  EventStatus status, TicketMapType ticketMapType,
+                                                  LocalDateTime from, LocalDateTime to,
+                                                  Pageable pageable) {
         var spec = EventSpecification.build(keyword, categoryId, city, status, null, ticketMapType, from, to, null);
         return eventRepository.findAll(spec, pageable).map(EventSummaryResponse::from);
     }
@@ -104,11 +125,19 @@ public class EventService {
     }
 
     @Transactional
-    public EventResponse create(EventCreateRequest req) {
+    public EventResponse create(EventCreateRequest req, String creatorEmail) {
         validateTimeRange(req.getStartTime(), req.getEndTime());
+        validateNotInPast(req.getStartTime(), req.getEndTime());
+        validateSaleEndTime(req.getSaleEndTime(), req.getEndTime());
 
         Category category = categoryRepository.findById(req.getCategoryId())
                 .orElseThrow(() -> new NotFoundException("Khong tim thay danh muc id = " + req.getCategoryId()));
+
+        // Lay id nguoi tao tu Authentication (email trong JWT), khong nhan truc tiep tu FE
+        // de tranh gia mao created_by (VD gui createdBy cua nguoi khac qua Postman).
+        Long creatorId = userRepository.findByEmail(creatorEmail)
+                .orElseThrow(() -> new NotFoundException("Khong tim thay nguoi dung dang dang nhap"))
+                .getId();
 
         Event event = Event.builder()
                 .name(req.getName())
@@ -125,7 +154,7 @@ public class EventService {
                 .saleEndTime(req.getSaleEndTime())
                 .ticketMapType(req.getTicketMapType())
                 .status(EventStatus.DRAFT)
-                .createdBy(req.getCreatedBy())
+                .createdBy(creatorId)
                 .build();
 
         return EventResponse.from(eventRepository.save(event));
@@ -141,6 +170,11 @@ public class EventService {
         }
 
         validateTimeRange(req.getStartTime(), req.getEndTime());
+        validateSaleEndTime(req.getSaleEndTime(), req.getEndTime());
+        boolean alreadyStarted = event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now());
+        if (!alreadyStarted) {
+            validateNotInPast(req.getStartTime(), req.getEndTime());
+        }
 
         Category category = categoryRepository.findById(req.getCategoryId())
                 .orElseThrow(() -> new NotFoundException("Khong tim thay danh muc id = " + req.getCategoryId()));
@@ -193,7 +227,9 @@ public class EventService {
         // thay vi xoa cung, de giu lich su cho bao cao/doanh thu (module Nguyen).
         if (event.getStatus() != EventStatus.DRAFT) {
             throw new BadRequestException(
-                    "Chi co the xoa su kien dang o trang thai DRAFT. Voi su kien da Publish, vui long chuyen sang CANCELLED.");
+                    "Chi co the xoa cung su kien dang o trang thai DRAFT. Su kien da Publish (ke ca da CANCELLED) "
+                            + "duoc giu lai de phuc vu bao cao/doanh thu, khong the xoa - CANCELLED la trang thai "
+                            + "ket thuc thay the cho xoa, khong phai buoc trung gian truoc khi xoa.");
         }
         eventRepository.delete(event);
     }

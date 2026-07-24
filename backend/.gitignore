@@ -1,6 +1,9 @@
 HELP.md
 target/
 
+### Uploaded files (anh thumbnail/banner luu local, khong commit) ###
+uploads/
+
 ### Secrets - never commit real credentials ###
 application-local.properties
 !application-local.properties.example
