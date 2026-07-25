@@ -49,6 +49,7 @@ const getNotificationIcon = (
             return ShoppingCart;
 
         case 'TICKET_CHECKED_IN':
+        case 'TICKET_EXPIRED':
             return TicketCheck;
 
         case 'EVENT_REMINDER':

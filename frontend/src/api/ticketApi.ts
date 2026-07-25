@@ -10,6 +10,8 @@ export type TicketResponse = {
     venueName: string | null;
     address: string | null;
     eventStartTime: string | null;
+    eventEndTime: string | null;
+    qrAvailable: boolean;
 
     zoneName: string | null;
     seatCode: string | null;

@@ -43,7 +43,13 @@ public class DashboardService {
                 orderRepository.countByStatus(OrderStatus.SUCCESS);
 
         long totalTickets =
-                eTicketRepository.count();
+                eTicketRepository.countByStatusIn(
+                        List.of(
+                                TicketStatus.ISSUED,
+                                TicketStatus.CHECKED_IN,
+                                TicketStatus.EXPIRED
+                        )
+                );
 
         long checkedInTickets =
                 eTicketRepository.countByStatus(

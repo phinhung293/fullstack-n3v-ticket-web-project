@@ -17,7 +17,9 @@ import com.n3v.ticket.repositories.EventRepository;
 import com.n3v.ticket.specifications.EventSpecification;
 import com.n3v.ticket.dto.notification.CreateNotificationRequest;
 import com.n3v.ticket.entities.User;
+import com.n3v.ticket.entities.ETicket;
 import com.n3v.ticket.enums.NotificationType;
+import com.n3v.ticket.enums.TicketStatus;
 import com.n3v.ticket.repositories.ETicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -219,9 +221,24 @@ public class EventService {
 
         if (newStatus == EventStatus.CANCELLED) {
             notifyEventCancelled(savedEvent);
+            cancelUnusedTickets(savedEvent);
         }
 
         return EventResponse.from(savedEvent);
+    }
+
+    private void cancelUnusedTickets(Event event) {
+        List<ETicket> unusedTickets =
+                eTicketRepository.findByEventIdAndStatusIn(
+                        event.getId(),
+                        List.of(TicketStatus.ISSUED)
+                );
+
+        unusedTickets.forEach(ticket ->
+                ticket.setStatus(TicketStatus.CANCELLED)
+        );
+
+        eTicketRepository.saveAll(unusedTickets);
     }
 
     private void notifyEventCancelled(Event event) {

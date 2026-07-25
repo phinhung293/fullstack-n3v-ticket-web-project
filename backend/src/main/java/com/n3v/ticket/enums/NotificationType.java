@@ -11,6 +11,9 @@ public enum NotificationType {
     // User và admin: vé vừa được check-in
     TICKET_CHECKED_IN,
 
+    // User: vé chưa sử dụng đã hết hạn khi sự kiện kết thúc
+    TICKET_EXPIRED,
+
     // User: sự kiện sắp diễn ra
     EVENT_REMINDER,
 

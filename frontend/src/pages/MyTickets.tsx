@@ -330,15 +330,32 @@ function MyTickets() {
                                             </div>
                                         )}
 
+                                    {ticket.status === 'EXPIRED' && (
+                                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+                                            Vé đã quá hạn và không còn sử dụng
+                                            được.
+                                        </div>
+                                    )}
+
+                                    {ticket.status === 'CANCELLED' && (
+                                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                                            Vé đã bị hủy và không còn sử dụng
+                                            được.
+                                        </div>
+                                    )}
+
                                     <button
                                         type="button"
                                         onClick={() =>
                                             void openTicketQr(ticket)
                                         }
-                                        className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0B1736] text-sm font-black text-white transition hover:bg-[#162A49]"
+                                        disabled={!ticket.qrAvailable}
+                                        className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0B1736] text-sm font-black text-white transition hover:bg-[#162A49] disabled:cursor-not-allowed disabled:bg-slate-300"
                                     >
                                         <QrCode size={20} />
-                                        Xem mã QR
+                                        {ticket.qrAvailable
+                                            ? 'Xem mã QR'
+                                            : 'Mã QR không còn hiệu lực'}
                                     </button>
                                 </div>
                             </article>
