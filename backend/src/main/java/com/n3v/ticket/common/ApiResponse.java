@@ -22,7 +22,7 @@ public record ApiResponse<T>(
         return success(message, null);
     }
 
-    public static ApiResponse<Void> error(int code, String message) {
+    public static <T> ApiResponse<T> error(int code, String message) {
         return new ApiResponse<>(code, false, message, null, LocalDateTime.now());
     }
 }

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { getAuthUser } from '../utils/authStorage';
 import axiosInstance from '../api/axiosInstance';
+import OrderHistory from '../components/profile/OrderHistory';
 
 type ProfileUser = {
     id?: number;
@@ -171,14 +172,14 @@ function Profile() {
     const joinedDate = formatDate(profileUser?.createdAt);
 
     const menuButtonClass = (tab: ActiveTab) =>
-        `flex w-full items-center gap-4 px-5 py-5 text-left text-sm font-black transition ${
+        `flex w-full items-center gap-4 px-5 py-4 lg:py-5 text-left text-sm font-black transition ${
             activeTab === tab
-                ? 'border-l-4 border-[#F43F73] bg-[#F43F73]/10 text-[#F43F73]'
-                : 'border-l-4 border-transparent text-[#0B1736] hover:bg-[#F8FAFC] hover:text-[#F43F73]'
+                ? 'border-b-4 lg:border-b-0 lg:border-l-4 border-[#F43F73] bg-[#F43F73]/10 text-[#F43F73]'
+                : 'border-b-4 lg:border-b-0 lg:border-l-4 border-transparent text-[#0B1736] hover:bg-[#F8FAFC] hover:text-[#F43F73]'
         }`;
 
     const contentCardClass =
-        'h-[500px] rounded-2xl border border-[#F43F73]/50 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)]';
+        'min-w-0 min-h-[500px] h-fit rounded-2xl border border-[#F43F73]/50 bg-white p-5 sm:p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)]';
 
     const profileInputClass =
         'h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm font-semibold text-[#0B1736] outline-none transition placeholder:text-[#94A3B8] focus:border-[#F43F73] focus:ring-4 focus:ring-[#F43F73]/10';
@@ -389,37 +390,37 @@ function Profile() {
         <main className="bg-white">
             <section className="mx-auto min-h-[600px] max-w-[1320px] px-6 py-10">
                 <div className="grid items-start gap-8 lg:grid-cols-[270px_1fr]">
-                    <aside className="space-y-5">
-                        <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
+                    <aside className="space-y-5 min-w-0">
+                        <div className="flex overflow-x-auto lg:flex-col lg:overflow-visible rounded-xl border border-[#E2E8F0] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] hide-scrollbar">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('profile')}
-                                className={menuButtonClass('profile')}
+                                className={`${menuButtonClass('profile')} whitespace-nowrap lg:whitespace-normal`}
                             >
-                                <UserRound size={24} />
+                                <UserRound size={24} className="shrink-0" />
                                 Thông tin cá nhân
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('history')}
-                                className={menuButtonClass('history')}
+                                className={`${menuButtonClass('history')} whitespace-nowrap lg:whitespace-normal`}
                             >
-                                <History size={24} />
+                                <History size={24} className="shrink-0" />
                                 Lịch sử đặt vé
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('security')}
-                                className={menuButtonClass('security')}
+                                className={`${menuButtonClass('security')} whitespace-nowrap lg:whitespace-normal`}
                             >
-                                <ShieldCheck size={24} />
+                                <ShieldCheck size={24} className="shrink-0" />
                                 Bảo mật tài khoản
                             </button>
                         </div>
 
-                        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
+                        <div className="hidden lg:block rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
                             <div className="flex items-start gap-4">
                                 <Headphones
                                     size={32}
@@ -450,7 +451,7 @@ function Profile() {
                     <div className={contentCardClass}>
                         {activeTab === 'profile' && (
                             <>
-                                <h1 className="text-3xl font-black text-[#0B1736]">
+                                <h1 className="text-2xl sm:text-3xl font-black text-[#0B1736]">
                                     Thông tin cá nhân
                                 </h1>
 
@@ -467,7 +468,7 @@ function Profile() {
                                     </div>
                                 )}
 
-                                <div className="mt-8 grid gap-10 lg:grid-cols-[220px_1fr]">
+                                <div className="mt-6 sm:mt-8 grid gap-6 lg:gap-10 lg:grid-cols-[220px_1fr]">
                                     <div className="relative flex flex-col items-center">
                                         <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-[#F43F73]/25 bg-[#F8FAFC] text-[#0B1736]">
                                             {avatarPreview || profileUser?.avatarUrl ? (
@@ -551,7 +552,7 @@ function Profile() {
                                             </div>
                                         )}
 
-                                        <div className="mt-10 flex w-full flex-col items-center gap-3">
+                                        <div className="mt-6 lg:mt-10 flex w-full flex-col items-center gap-3">
                                             {!isEditingProfile ? (
                                                 <button
                                                     type="button"
@@ -594,7 +595,7 @@ function Profile() {
 
                                     <div className="pt-1">
                                         <div className="divide-y divide-[#E2E8F0]">
-                                            <div className="grid grid-cols-[180px_1fr] items-center gap-8 py-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-8 py-3">
                                                 <div className="text-base font-black text-[#0B1736]">
                                                     Họ và tên
                                                 </div>
@@ -618,7 +619,7 @@ function Profile() {
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-[180px_1fr] items-center gap-8 py-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-8 py-3">
                                                 <div className="text-base font-black text-[#0B1736]">
                                                     Email
                                                 </div>
@@ -642,7 +643,7 @@ function Profile() {
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-[180px_1fr] items-center gap-8 py-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-8 py-3">
                                                 <div className="text-base font-black text-[#0B1736]">
                                                     Số điện thoại
                                                 </div>
@@ -668,7 +669,7 @@ function Profile() {
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-[180px_1fr] items-center gap-8 py-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-8 py-3">
                                                 <div className="text-base font-black text-[#0B1736]">
                                                     Ngày sinh
                                                 </div>
@@ -692,7 +693,7 @@ function Profile() {
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-[180px_1fr] items-center gap-8 py-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-8 py-3">
                                                 <div className="text-base font-black text-[#0B1736]">
                                                     Giới tính
                                                 </div>
@@ -720,7 +721,7 @@ function Profile() {
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-[180px_1fr] items-center gap-8 py-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] items-start sm:items-center gap-2 sm:gap-8 py-3">
                                                 <div className="text-base font-black text-[#0B1736]">
                                                     Ngày tham gia
                                                 </div>
@@ -744,16 +745,8 @@ function Profile() {
                         )}
 
                         {activeTab === 'history' && (
-                            <div className="flex h-full items-center justify-center">
-                                <div className="text-center">
-                                    <h1 className="text-3xl font-black text-[#0B1736]">
-                                        Lịch sử đặt vé
-                                    </h1>
-
-                                    <p className="mt-3 text-sm font-medium text-[#94A3B8]">
-                                        Nội dung lịch sử đặt vé sẽ được thiết kế sau.
-                                    </p>
-                                </div>
+                            <div className="h-full">
+                                <OrderHistory />
                             </div>
                         )}
 

@@ -10,6 +10,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -73,6 +74,24 @@ public class GlobalExceptionHandle {
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(400, "Data Integrity Violation. Please check duplicate or foreign key constraint violation"));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingRequestParameter(
+            MissingServletRequestParameterException ex
+    ) {
+        String message;
+
+        if ("from".equals(ex.getParameterName())) {
+            message = "Thiếu tham số ngày bắt đầu: from";
+        } else if ("to".equals(ex.getParameterName())) {
+            message = "Thiếu tham số ngày kết thúc: to";
+        } else {
+            message = "Thiếu tham số bắt buộc: " + ex.getParameterName();
+        }
+
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(400, message));
     }
 
     // 8. Lỗi hệ thống chưa xác định
