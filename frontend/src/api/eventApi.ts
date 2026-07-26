@@ -112,6 +112,27 @@ export const adminDeleteEvent = async (id: number | string): Promise<void> => {
     await axiosInstance.delete(`/admin/events/${id}`);
 };
 
+// Upload ảnh (thumbnail/banner) - trả về URL dạng "/uploads/xxx.jpg", cần nối với
+// origin backend (VD http://localhost:8080) khi hiển thị <img>, xem toAbsoluteImageUrl.
+export const adminUploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await axiosInstance.post<ApiResponse<{ url: string }>>('/admin/uploads/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data.url;
+};
+
+// axiosInstance.baseURL là 'http://localhost:8080/api', còn ảnh được serve ở gốc
+// 'http://localhost:8080/uploads/...' (không có '/api'), nên cần build lại origin riêng.
+export const toAbsoluteImageUrl = (url?: string | null): string | undefined => {
+    if (!url) return undefined;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const apiBaseUrl = axiosInstance.defaults.baseURL ?? '';
+    const origin = apiBaseUrl.replace(/\/api\/?$/, '');
+    return `${origin}${url}`;
+};
+
 // ---------- Admin - Khu vực (Zone) ----------
 
 export const adminGetZones = async (eventId: number | string): Promise<EventZoneResponse[]> => {

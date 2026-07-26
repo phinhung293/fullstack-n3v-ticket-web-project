@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, MapPin, MousePointerClick, Ticket } from 'lucide-react';
 import SeatMap from '../components/events/SeatMap';
 import ZoneQuantitySelector from '../components/events/ZoneQuantitySelector';
-import { getEventApiErrorMessage, getPublicEventById, getPublicZoneSeats } from '../api/eventApi';
+import { getEventApiErrorMessage, getPublicEventById, getPublicZoneSeats, toAbsoluteImageUrl } from '../api/eventApi';
 import type { EventResponse, EventSeatResponse, EventZoneResponse } from '../types/event';
 import {
     canPurchase,
@@ -21,6 +21,7 @@ function EventDetail() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showPicker, setShowPicker] = useState(false);
+
     // zoneId -> danh sách ghế/bàn của zone đó (SEAT_MAP / TEA_LOUNGE)
     const [seatsByZone, setSeatsByZone] = useState<Record<number, EventSeatResponse[]>>({});
     const [seatsLoading, setSeatsLoading] = useState(false);
@@ -86,48 +87,20 @@ function EventDetail() {
     // Tất cả ghế/bàn (SEAT_MAP hoặc TEA_LOUNGE) của các zone đã tải, gộp lại cho SeatMap.
     const allSeats = activeZones.flatMap((z) => seatsByZone[z.id] || []);
 
-    const handleBuySeats = (
-        selectedSeats: EventSeatResponse[],
-        total: number,
-    ) => {
-        const payload = {
-            seatIds: selectedSeats.map((seat) => seat.id),
-            zones: [],
-        };
-
-        navigate('/checkout', {
-            state: {
-                event,
-                selectedSeats,
-                total,
-                payload,
-            },
-        });
+    const handleBuySeats = (selectedSeats: EventSeatResponse[], total: number) => {
+        // TODO: điểm tích hợp với Cart / Checkout thật (module Đặt vé & thanh toán) - hiện
+        // tại chỉ demo bằng alert, KHÔNG đụng vào logic Cart/Thanh toán hiện có của dự án.
+        const seatList = selectedSeats.map((seat) => seat.seatCode).join(', ');
+        alert(`Đã chọn ${selectedSeats.length} ghế (${seatList})\nTổng tiền: ${formatCurrency(total)}`);
     };
 
     const handleBuyZones = (
-        selections: {
-            zone: EventZoneResponse;
-            quantity: number;
-        }[],
+        selections: { zone: EventZoneResponse; quantity: number }[],
         total: number,
     ) => {
-        const payload = {
-            seatIds: [],
-            zones: selections.map((selection) => ({
-                zoneId: selection.zone.id,
-                quantity: selection.quantity,
-            })),
-        };
-
-        navigate('/checkout', {
-            state: {
-                event,
-                selectedZones: selections,
-                total,
-                payload,
-            },
-        });
+        // TODO: điểm tích hợp với Cart / Checkout thật (module Đặt vé & thanh toán).
+        const summary = selections.map((s) => `${s.zone.zoneName} x${s.quantity}`).join(', ');
+        alert(`Đã chọn: ${summary}\nTổng tiền: ${formatCurrency(total)}`);
     };
 
     const pickerLabel = event.ticketMapType === 'ZONE' ? 'Chọn vé' : 'Chọn vị trí';
@@ -136,7 +109,7 @@ function EventDetail() {
         <div className="bg-white">
             <div className="relative aspect-[16/6] w-full overflow-hidden bg-[#0B1736] sm:aspect-[16/5]">
                 <img
-                    src={event.bannerUrl || event.thumbnailUrl || undefined}
+                    src={toAbsoluteImageUrl(event.bannerUrl || event.thumbnailUrl)}
                     alt={event.name}
                     className={`h-full w-full object-cover opacity-80 ${displayStatus === 'EXPIRED' || displayStatus === 'COMPLETED' ? 'grayscale' : ''
                         }`}
