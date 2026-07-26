@@ -128,7 +128,8 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/events/**",
                                 "/api/categories/**",
-                                "/api/banners/**"
+                                "/api/banners/**",
+                                "/uploads/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/admin/**"

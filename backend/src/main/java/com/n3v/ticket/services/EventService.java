@@ -14,13 +14,8 @@ import com.n3v.ticket.enums.EventStatus;
 import com.n3v.ticket.enums.TicketMapType;
 import com.n3v.ticket.repositories.CategoryRepository;
 import com.n3v.ticket.repositories.EventRepository;
+import com.n3v.ticket.repositories.UserRepository;
 import com.n3v.ticket.specifications.EventSpecification;
-import com.n3v.ticket.dto.notification.CreateNotificationRequest;
-import com.n3v.ticket.entities.User;
-import com.n3v.ticket.entities.ETicket;
-import com.n3v.ticket.enums.NotificationType;
-import com.n3v.ticket.enums.TicketStatus;
-import com.n3v.ticket.repositories.ETicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,8 +27,6 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -41,16 +34,14 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final CategoryRepository categoryRepository;
-    private final ETicketRepository eTicketRepository;
-    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     /**
      * Bang trang thai duoc phep chuyen toi. Dat o day de de doc/de test,
      * khong ran trai code nhu 1 chuoi if-else dai.
      */
     private static final Map<EventStatus, EnumSet<EventStatus>> ALLOWED_TRANSITIONS = new EnumMap<>(EventStatus.class);
-    private static final DateTimeFormatter EVENT_TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("HH:mm 'ngày' dd/MM/yyyy");
+
     static {
         ALLOWED_TRANSITIONS.put(EventStatus.DRAFT, EnumSet.of(EventStatus.PUBLISHED, EventStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(EventStatus.PUBLISHED, EnumSet.of(EventStatus.ONGOING, EventStatus.CANCELLED, EventStatus.DRAFT));
@@ -70,11 +61,30 @@ public class EventService {
         }
     }
 
+    /** Dong ban ve khong duoc muon hon thoi gian ket thuc su kien. */
+    private void validateSaleEndTime(LocalDateTime saleEndTime, LocalDateTime endTime) {
+        if (saleEndTime != null && endTime != null && saleEndTime.isAfter(endTime)) {
+            throw new BadRequestException("Thoi gian dong ban ve khong duoc muon hon thoi gian ket thuc su kien");
+        }
+    }
+
+    /** Chi ap dung khi TAO MOI: khong cho startTime/endTime la ngay trong qua khu. Khi SUA,
+     *  su kien co the dang ONGOING (da bat dau that su) nen khong ap dung rule nay. */
+    private void validateNotInPast(LocalDateTime start, LocalDateTime end) {
+        LocalDateTime now = LocalDateTime.now();
+        if (start != null && start.isBefore(now)) {
+            throw new BadRequestException("Thoi gian bat dau khong duoc la ngay trong qua khu");
+        }
+        if (end != null && end.isBefore(now)) {
+            throw new BadRequestException("Thoi gian ket thuc khong duoc la ngay trong qua khu");
+        }
+    }
+
     /** Danh sach cong khai cho khach - chi thay PUBLISHED/ONGOING, va AN Event da het han mua ve. */
     public Page<EventSummaryResponse> searchPublic(String keyword, Long categoryId, String city,
-                                                     TicketMapType ticketMapType,
-                                                     LocalDateTime from, LocalDateTime to,
-                                                     Pageable pageable) {
+                                                   TicketMapType ticketMapType,
+                                                   LocalDateTime from, LocalDateTime to,
+                                                   Pageable pageable) {
         var spec = EventSpecification.build(
                 keyword, categoryId, city,
                 null, List.of(EventStatus.PUBLISHED, EventStatus.ONGOING),
@@ -86,9 +96,9 @@ public class EventService {
 
     /** Danh sach cho admin - xem duoc tat ca status (ke ca da het han mua ve), filter them theo status cu the. */
     public Page<EventSummaryResponse> searchAdmin(String keyword, Long categoryId, String city,
-                                                    EventStatus status, TicketMapType ticketMapType,
-                                                    LocalDateTime from, LocalDateTime to,
-                                                    Pageable pageable) {
+                                                  EventStatus status, TicketMapType ticketMapType,
+                                                  LocalDateTime from, LocalDateTime to,
+                                                  Pageable pageable) {
         var spec = EventSpecification.build(keyword, categoryId, city, status, null, ticketMapType, from, to, null);
         return eventRepository.findAll(spec, pageable).map(EventSummaryResponse::from);
     }
@@ -115,11 +125,19 @@ public class EventService {
     }
 
     @Transactional
-    public EventResponse create(EventCreateRequest req) {
+    public EventResponse create(EventCreateRequest req, String creatorEmail) {
         validateTimeRange(req.getStartTime(), req.getEndTime());
+        validateNotInPast(req.getStartTime(), req.getEndTime());
+        validateSaleEndTime(req.getSaleEndTime(), req.getEndTime());
 
         Category category = categoryRepository.findById(req.getCategoryId())
                 .orElseThrow(() -> new NotFoundException("Khong tim thay danh muc id = " + req.getCategoryId()));
+
+        // Lay id nguoi tao tu Authentication (email trong JWT), khong nhan truc tiep tu FE
+        // de tranh gia mao created_by (VD gui createdBy cua nguoi khac qua Postman).
+        Long creatorId = userRepository.findByEmail(creatorEmail)
+                .orElseThrow(() -> new NotFoundException("Khong tim thay nguoi dung dang dang nhap"))
+                .getId();
 
         Event event = Event.builder()
                 .name(req.getName())
@@ -136,7 +154,7 @@ public class EventService {
                 .saleEndTime(req.getSaleEndTime())
                 .ticketMapType(req.getTicketMapType())
                 .status(EventStatus.DRAFT)
-                .createdBy(req.getCreatedBy())
+                .createdBy(creatorId)
                 .build();
 
         return EventResponse.from(eventRepository.save(event));
@@ -145,8 +163,6 @@ public class EventService {
     @Transactional
     public EventResponse update(Long id, EventUpdateRequest req) {
         Event event = findEntity(id);
-        LocalDateTime oldStartTime = event.getStartTime();
-        LocalDateTime oldEndTime = event.getEndTime();
 
         // Khong cho sua su kien da CANCELLED/COMPLETED (da "chot" du lieu).
         if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
@@ -154,6 +170,11 @@ public class EventService {
         }
 
         validateTimeRange(req.getStartTime(), req.getEndTime());
+        validateSaleEndTime(req.getSaleEndTime(), req.getEndTime());
+        boolean alreadyStarted = event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now());
+        if (!alreadyStarted) {
+            validateNotInPast(req.getStartTime(), req.getEndTime());
+        }
 
         Category category = categoryRepository.findById(req.getCategoryId())
                 .orElseThrow(() -> new NotFoundException("Khong tim thay danh muc id = " + req.getCategoryId()));
@@ -173,27 +194,7 @@ public class EventService {
         // Co tinh khong cho doi ticketMapType khi update: neu zone/seat da duoc tao
         // theo 1 kieu so do, doi kieu giua chung se lam sai logic hien thi & dat ve.
 
-        Event savedEvent = eventRepository.save(event);
-
-        boolean scheduleChanged =
-                !Objects.equals(oldStartTime, savedEvent.getStartTime())
-                        || !Objects.equals(
-                        oldEndTime,
-                        savedEvent.getEndTime()
-                );
-
-        if (scheduleChanged
-                && (savedEvent.getStatus() == EventStatus.PUBLISHED
-                || savedEvent.getStatus() == EventStatus.ONGOING)) {
-
-            notifyEventRescheduled(
-                    savedEvent,
-                    oldStartTime,
-                    oldEndTime
-            );
-        }
-
-        return EventResponse.from(savedEvent);
+        return EventResponse.from(eventRepository.save(event));
     }
 
     @Transactional
@@ -216,150 +217,7 @@ public class EventService {
         }
 
         event.setStatus(newStatus);
-
-        Event savedEvent = eventRepository.save(event);
-
-        if (newStatus == EventStatus.CANCELLED) {
-            notifyEventCancelled(savedEvent);
-            cancelUnusedTickets(savedEvent);
-        }
-
-        return EventResponse.from(savedEvent);
-    }
-
-    private void cancelUnusedTickets(Event event) {
-        List<ETicket> unusedTickets =
-                eTicketRepository.findByEventIdAndStatusIn(
-                        event.getId(),
-                        List.of(TicketStatus.ISSUED)
-                );
-
-        unusedTickets.forEach(ticket ->
-                ticket.setStatus(TicketStatus.CANCELLED)
-        );
-
-        eTicketRepository.saveAll(unusedTickets);
-    }
-
-    private void notifyEventCancelled(Event event) {
-        List<User> recipients =
-                eTicketRepository.findDistinctUsersByEventId(
-                        event.getId()
-                );
-
-        for (User recipient : recipients) {
-            notificationService.createNotification(
-                    CreateNotificationRequest.builder()
-                            .userId(recipient.getId())
-                            .type(NotificationType.EVENT_CANCELLED)
-                            .title("Sự kiện đã bị hủy")
-                            .message(
-                                    "Sự kiện "
-                                            + event.getName()
-                                            + " đã bị hủy. "
-                                            + "Vui lòng kiểm tra thông tin đơn hàng "
-                                            + "hoặc liên hệ ban tổ chức để được hỗ trợ."
-                            )
-                            .targetUrl("/my-tickets")
-                            .referenceType("EVENT")
-                            .referenceId(event.getId())
-                            .deduplicationKey(
-                                    "EVENT_CANCELLED_"
-                                            + event.getId()
-                                            + "_USER_"
-                                            + recipient.getId()
-                            )
-                            .build()
-            );
-        }
-    }
-
-    private void notifyEventRescheduled(
-            Event event,
-            LocalDateTime oldStartTime,
-            LocalDateTime oldEndTime
-    ) {
-        List<User> recipients =
-                eTicketRepository.findDistinctUsersByEventId(
-                        event.getId()
-                );
-
-        String oldSchedule =
-                formatSchedule(oldStartTime, oldEndTime);
-
-        String newSchedule =
-                formatSchedule(
-                        event.getStartTime(),
-                        event.getEndTime()
-                );
-
-        for (User recipient : recipients) {
-            notificationService.createNotification(
-                    CreateNotificationRequest.builder()
-                            .userId(recipient.getId())
-                            .type(NotificationType.EVENT_RESCHEDULED)
-                            .title("Lịch sự kiện đã thay đổi")
-                            .message(
-                                    "Sự kiện "
-                                            + event.getName()
-                                            + " đã đổi lịch từ "
-                                            + oldSchedule
-                                            + " sang "
-                                            + newSchedule
-                                            + "."
-                            )
-                            .targetUrl(
-                                    "/events/" + event.getId()
-                            )
-                            .referenceType("EVENT")
-                            .referenceId(event.getId())
-                            .deduplicationKey(
-                                    buildRescheduleDeduplicationKey(
-                                            event,
-                                            recipient
-                                    )
-                            )
-                            .build()
-            );
-        }
-    }
-
-    private String buildRescheduleDeduplicationKey(
-            Event event,
-            User recipient
-    ) {
-        /*
-         * Có thêm thời gian mới trong khóa để nếu sự kiện đổi lịch
-         * lần thứ hai, user vẫn nhận được thông báo mới.
-         */
-        return "EVENT_RESCHEDULED_"
-                + event.getId()
-                + "_"
-                + event.getStartTime()
-                + "_"
-                + event.getEndTime()
-                + "_USER_"
-                + recipient.getId();
-    }
-
-    private String formatSchedule(
-            LocalDateTime startTime,
-            LocalDateTime endTime
-    ) {
-        if (startTime == null) {
-            return "thời gian chưa xác định";
-        }
-
-        String formattedStart =
-                startTime.format(EVENT_TIME_FORMATTER);
-
-        if (endTime == null) {
-            return formattedStart;
-        }
-
-        return formattedStart
-                + " đến "
-                + endTime.format(EVENT_TIME_FORMATTER);
+        return EventResponse.from(eventRepository.save(event));
     }
 
     @Transactional
@@ -369,7 +227,9 @@ public class EventService {
         // thay vi xoa cung, de giu lich su cho bao cao/doanh thu (module Nguyen).
         if (event.getStatus() != EventStatus.DRAFT) {
             throw new BadRequestException(
-                    "Chi co the xoa su kien dang o trang thai DRAFT. Voi su kien da Publish, vui long chuyen sang CANCELLED.");
+                    "Chi co the xoa cung su kien dang o trang thai DRAFT. Su kien da Publish (ke ca da CANCELLED) "
+                            + "duoc giu lai de phuc vu bao cao/doanh thu, khong the xoa - CANCELLED la trang thai "
+                            + "ket thuc thay the cho xoa, khong phai buoc trung gian truoc khi xoa.");
         }
         eventRepository.delete(event);
     }

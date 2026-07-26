@@ -37,7 +37,4 @@ public class EventCreateRequest {
 
     @NotNull(message = "Vui long chon loai so do ve (SEAT_MAP / ZONE / TEA_LOUNGE)")
     private TicketMapType ticketMapType;
-
-    // TODO: khi Spring Security xong, lay tu Authentication thay vi nhan tu FE.
-    private Long createdBy;
 }

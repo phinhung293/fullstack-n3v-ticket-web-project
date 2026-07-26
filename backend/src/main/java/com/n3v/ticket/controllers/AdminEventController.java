@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -20,9 +21,8 @@ import java.time.LocalDateTime;
  * POST /api/admin/events (tao DRAFT), sau do goi cac API cua EventZoneController /
  * EventSeatController de cau hinh so do ve, roi moi PATCH status sang PUBLISHED.
  *
- * TODO: bao ve toan bo controller nay bang quyen ADMIN (VD @PreAuthorize hoac
- * SecurityFilterChain rieng cho prefix "/api/admin/**") sau khi tich hop xong
- * Spring Security - tuong tu cach AdminController (module User) dang lam.
+ * Da duoc bao ve quyen ADMIN o tang SecurityConfig (hasRole("ADMIN") cho toan bo
+ * prefix "/api/admin/**"), khong can @PreAuthorize rieng trong controller nay.
  */
 @RestController
 @RequestMapping("/api/admin/events")
@@ -54,8 +54,8 @@ public class AdminEventController {
     }
 
     @PostMapping
-    public ApiResponse<EventResponse> create(@Valid @RequestBody EventCreateRequest request) {
-        return ApiResponse.success("Tao su kien thanh cong", eventService.create(request));
+    public ApiResponse<EventResponse> create(@Valid @RequestBody EventCreateRequest request, Authentication auth) {
+        return ApiResponse.success("Tao su kien thanh cong", eventService.create(request, auth.getName()));
     }
 
     @PutMapping("/{id}")
