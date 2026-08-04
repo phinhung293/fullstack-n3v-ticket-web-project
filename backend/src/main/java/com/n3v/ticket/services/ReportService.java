@@ -65,7 +65,12 @@ public class ReportService {
                         );
 
         long totalTickets =
-                eTicketRepository.countByCreatedAtBetween(
+                eTicketRepository.countByStatusInAndCreatedAtBetween(
+                        List.of(
+                                TicketStatus.ISSUED,
+                                TicketStatus.CHECKED_IN,
+                                TicketStatus.EXPIRED
+                        ),
                         ticketFromDateTime,
                         ticketToDateTime
                 );

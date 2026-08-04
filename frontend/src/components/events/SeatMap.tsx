@@ -23,10 +23,8 @@ type Props = {
 // (LOCKED = đang được người khác giữ tạm lúc checkout, không riêng gì SOLD).
 const isSelectable = (seat: EventSeatResponse) => seat.status === 'AVAILABLE';
 
-// GAP BACKEND: EventSeatResponse hiện tại không có field seatTier (VIP/STANDARD),
-// nên UI tạm thời không tô đỏ (VIP) / xanh (Thường) như yêu cầu gốc, chỉ có 1 màu
-// "còn trống". Muốn khôi phục phân biệt VIP/Thường, cần backend thêm seatTier vào
-// EventSeatResponse (entity EventSeat đã có sẵn field này, chỉ thiếu ở tầng DTO/mapper).
+// Backend đã trả seatTier (VIP/STANDARD) trong EventSeatResponse, dùng để tô màu
+// ghế còn trống theo hạng: VIP màu hổ phách, STANDARD (mặc định) màu xanh lá.
 
 function SeatMap({ seats, zones, onBuyNow }: Props) {
     // BUG ĐÃ SỬA: state chọn ghế trước đây dùng `seat.seatCode` (VD "B5") làm khóa.
@@ -118,10 +116,9 @@ function SeatMap({ seats, zones, onBuyNow }: Props) {
         if (selected[seat.id]) {
             return 'bg-[#0B1736] text-white ring-2 ring-offset-1 ring-[#0B1736] scale-105';
         }
-        // EventSeatResponse hiện tại KHÔNG có field seatTier (VIP/STANDARD) từ backend,
-        // nên tạm thời không thể tô đỏ/xanh theo hạng ghế thật. Đây là gap cần backend bổ
-        // sung field seatTier vào EventSeatResponse (entity EventSeat đã có sẵn seatTier,
-        // chỉ là DTO/mapper hiện chưa trả ra) — xem ghi chú cuối file.
+        if (seat.seatTier === 'VIP') {
+            return 'bg-[#D97706]/15 text-[#B45309] hover:bg-[#D97706] hover:text-white';
+        }
         return 'bg-[#16A34A]/15 text-[#15803D] hover:bg-[#16A34A] hover:text-white';
     };
 
@@ -132,7 +129,11 @@ function SeatMap({ seats, zones, onBuyNow }: Props) {
                 <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-[#334155]">
                     <span className="flex items-center gap-1.5">
                         <span className="h-3.5 w-3.5 rounded-full bg-[#16A34A]" />
-                        Còn trống
+                        Còn trống (Thường)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                        <span className="h-3.5 w-3.5 rounded-full bg-[#D97706]" />
+                        Còn trống (VIP)
                     </span>
                     <span className="flex items-center gap-1.5">
                         <span className="h-3.5 w-3.5 rounded-full bg-[#94A3B8]" />

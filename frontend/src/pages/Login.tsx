@@ -12,6 +12,10 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import axios from 'axios';
 import axiosInstance from '../api/axiosInstance';
+import { saveAuth } from '../utils/authStorage';
+import {
+    consumeAuthSessionMessage,
+} from '../utils/authSession';
 
 type LoginResponseData = {
     accessToken: string;
@@ -32,7 +36,15 @@ function Login() {
     // const navigate = useNavigate();
     const location = useLocation();
 
-    const loginMessage = (location.state as { message?: string } | null)?.message || null;
+    const [loginMessage] = useState(() =>
+        consumeAuthSessionMessage() ||
+        (
+            location.state as {
+                message?: string;
+            } | null
+        )?.message ||
+        null,
+    );
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -74,8 +86,17 @@ function Login() {
 
             const userData = res.data.data;
 
-            localStorage.setItem('accessToken', userData.accessToken);
-            localStorage.setItem('authUser', JSON.stringify(userData));
+            saveAuth({
+                accessToken: userData.accessToken,
+                tokenType:
+                    userData.tokenType || 'Bearer',
+                userId: userData.userId,
+                fullName:
+                    userData.fullName || '',
+                email:
+                    userData.email || loginData.email,
+                role: userData.role,
+            });
 
             const redirectTo = sessionStorage.getItem('redirectAfterLogin');
             sessionStorage.removeItem('redirectAfterLogin');

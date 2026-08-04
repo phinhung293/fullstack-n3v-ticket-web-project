@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowLeft, Plus, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, X } from 'lucide-react';
 import TicketMapTypeSelector from '../../components/events/TicketMapTypeSelector';
-import { adminCreateEvent, createCategory, getCategories, getEventApiErrorMessage } from '../../api/eventApi';
-import type { CategoryResponse, EventCreateRequest, TicketMapType } from '../../types/event';
-import { fromDateTimeLocalInputValue } from '../../utils/format';
+import {
+    adminCreateEvent,
+    adminGetEventById,
+    adminUpdateEvent,
+    adminUploadImage,
+    createCategory,
+    getCategories,
+    getEventApiErrorMessage,
+    toAbsoluteImageUrl,
+} from '../../api/eventApi';
+import type { CategoryResponse, EventCreateRequest, EventUpdateRequest, TicketMapType } from '../../types/event';
+import { fromDateTimeLocalInputValue, toDateTimeLocalInputValue } from '../../utils/format';
 
 type Props = {
+    // Khi co eventId: form chay o che do SUA thong tin su kien co san (goi adminUpdateEvent).
+    // Khi khong co eventId: form chay o che do TAO MOI (goi adminCreateEvent), giu nguyen hanh vi cu.
+    eventId?: number;
     onCancel: () => void;
     onCreated: (eventId: number) => void;
+    onUpdated?: (eventId: number) => void;
 };
 
 type FormState = {
@@ -45,14 +58,31 @@ const inputClass =
     'h-11 w-full rounded-lg border border-[#DDE3EF] bg-white px-3 text-sm font-semibold text-[#0B1736] outline-none transition placeholder:text-[#94A3B8] focus:border-[#F43F73] focus:ring-2 focus:ring-[#F43F73]/10';
 const labelClass = 'mb-1.5 block text-sm font-black text-[#0B1736]';
 
-function AdminEventForm({ onCancel, onCreated }: Props) {
+// Gio hien tai theo gio dia phuong (KHONG dung toISOString vi no tra ve UTC), dinh dang
+// "YYYY-MM-DDTHH:mm" giong het gia tri cua input type="datetime-local", dung lam moc "min"
+// de khoa khong cho chon ngay da qua tren UI.
+const getNowLocalInputValue = (): string => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
+
+function AdminEventForm({ eventId, onCancel, onCreated, onUpdated }: Props) {
+    const isEditMode = eventId !== undefined;
     const [categories, setCategories] = useState<CategoryResponse[]>([]);
     const [form, setForm] = useState<FormState>(emptyForm);
     const [ticketMapType, setTicketMapType] = useState<TicketMapType | null>(null);
     const [isAddingCategory, setIsAddingCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [loading, setLoading] = useState(isEditMode);
     const [error, setError] = useState('');
+    const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+    const [uploadingBanner, setUploadingBanner] = useState(false);
+    // Chi cho phep startTime/endTime la qua khu khi su kien GOC (luc mo form) da thuc su
+    // bat dau roi (VD dang ONGOING). Neu su kien goc van chua bat dau (con o tuong lai),
+    // van ap dung rule "khong duoc chon ngay qua khu" giong het luc tao moi.
+    const [allowPastStart, setAllowPastStart] = useState(false);
 
     const loadCategories = () => {
         getCategories()
@@ -63,6 +93,33 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
     useEffect(() => {
         loadCategories();
     }, []);
+
+    // Che do SUA: tai thong tin su kien co san va do vao form.
+    useEffect(() => {
+        if (!isEditMode || eventId === undefined) return;
+        setLoading(true);
+        adminGetEventById(eventId)
+            .then((event) => {
+                setForm({
+                    name: event.name,
+                    description: event.description ?? '',
+                    thumbnailUrl: event.thumbnailUrl ?? '',
+                    bannerUrl: event.bannerUrl ?? '',
+                    categoryId: String(event.category.id),
+                    venueName: event.venueName ?? '',
+                    address: event.address ?? '',
+                    city: event.city ?? '',
+                    startTime: toDateTimeLocalInputValue(event.startTime),
+                    endTime: toDateTimeLocalInputValue(event.endTime),
+                    saleStartTime: toDateTimeLocalInputValue(event.saleStartTime),
+                    saleEndTime: toDateTimeLocalInputValue(event.saleEndTime),
+                });
+                setTicketMapType(event.ticketMapType);
+                setAllowPastStart(new Date(event.startTime) < new Date());
+            })
+            .catch((err) => setError(getEventApiErrorMessage(err)))
+            .finally(() => setLoading(false));
+    }, [isEditMode, eventId]);
 
     const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -80,6 +137,21 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
         }
     };
 
+    const handleImageUpload = async (field: 'thumbnailUrl' | 'bannerUrl', file: File | undefined) => {
+        if (!file) return;
+        const setUploading = field === 'thumbnailUrl' ? setUploadingThumbnail : setUploadingBanner;
+        setUploading(true);
+        setError('');
+        try {
+            const url = await adminUploadImage(file);
+            update({ [field]: url });
+        } catch (err) {
+            setError(getEventApiErrorMessage(err));
+        } finally {
+            setUploading(false);
+        }
+    };
+
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setError('');
@@ -88,9 +160,23 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
         if (!form.categoryId) return setError('Vui lòng chọn danh mục.');
         if (!form.venueName.trim()) return setError('Vui lòng nhập địa điểm tổ chức.');
         if (!form.startTime || !form.endTime) return setError('Vui lòng nhập thời gian bắt đầu và kết thúc.');
-        if (!ticketMapType) return setError('Vui lòng chọn loại sơ đồ vé.');
+        if (!isEditMode && !ticketMapType) return setError('Vui lòng chọn loại sơ đồ vé.');
 
-        const payload: EventCreateRequest = {
+        // Validate lai bang JS (phong khi trinh duyet khong chan het min/max cua input,
+        // VD Firefox/Safari cho go tay gia tri ngoai khoang min/max).
+        // Chi ap dung rule "khong duoc la ngay qua khu" khi TAO MOI - khi SUA, su kien co the
+        // dang ONGOING (da bat dau that su) nen startTime cu la qua khu la hop le, khong chan.
+        const now = new Date();
+        const startTimeDate = new Date(form.startTime);
+        const endTimeDate = new Date(form.endTime);
+        if (!allowPastStart && startTimeDate < now) return setError('Thời gian bắt đầu không được là ngày trong quá khứ.');
+        if (!allowPastStart && endTimeDate < now) return setError('Thời gian kết thúc không được là ngày trong quá khứ.');
+        if (endTimeDate <= startTimeDate) return setError('Thời gian kết thúc phải sau thời gian bắt đầu.');
+        if (form.saleEndTime && new Date(form.saleEndTime) > endTimeDate) {
+            return setError('Thời gian đóng bán vé không được muộn hơn thời gian kết thúc sự kiện.');
+        }
+
+        const basePayload = {
             name: form.name.trim(),
             description: form.description.trim() || undefined,
             thumbnailUrl: form.thumbnailUrl.trim() || undefined,
@@ -103,19 +189,36 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
             endTime: fromDateTimeLocalInputValue(form.endTime),
             saleStartTime: form.saleStartTime ? fromDateTimeLocalInputValue(form.saleStartTime) : undefined,
             saleEndTime: form.saleEndTime ? fromDateTimeLocalInputValue(form.saleEndTime) : undefined,
-            ticketMapType,
         };
 
         setSubmitting(true);
         try {
-            const created = await adminCreateEvent(payload);
-            onCreated(created.id);
+            if (isEditMode && eventId !== undefined) {
+                // EventUpdateRequest khong co ticketMapType - backend co tinh khong cho doi
+                // loai so do ve sau khi tao (xem EventService.update()).
+                const updatePayload: EventUpdateRequest = basePayload;
+                await adminUpdateEvent(eventId, updatePayload);
+                (onUpdated ?? onCreated)(eventId);
+            } else {
+                if (!ticketMapType) return setError('Vui lòng chọn loại sơ đồ vé.');
+                const createPayload: EventCreateRequest = { ...basePayload, ticketMapType };
+                const created = await adminCreateEvent(createPayload);
+                onCreated(created.id);
+            }
         } catch (err) {
             setError(getEventApiErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
     };
+
+    if (loading) {
+        return (
+            <section className="flex h-[400px] items-center justify-center rounded-2xl bg-white shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+                <Loader2 size={26} className="animate-spin text-[#F43F73]" />
+            </section>
+        );
+    }
 
     return (
         <section className="rounded-2xl bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
@@ -128,10 +231,13 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                     <ArrowLeft size={16} />
                 </button>
                 <div>
-                    <h1 className="text-xl font-black text-[#0B1736]">Tạo sự kiện mới</h1>
+                    <h1 className="text-xl font-black text-[#0B1736]">
+                        {isEditMode ? 'Sửa thông tin sự kiện' : 'Tạo sự kiện mới'}
+                    </h1>
                     <p className="mt-1 text-sm font-medium text-[#64748B]">
-                        Bước 1: nhập thông tin sự kiện và chọn loại sơ đồ bán vé. Sau khi tạo, bạn sẽ cấu hình
-                        khu vực / ghế / bàn ở bước tiếp theo.
+                        {isEditMode
+                            ? 'Chỉnh sửa thông tin cơ bản của sự kiện. Loại sơ đồ bán vé không thể đổi sau khi tạo.'
+                            : 'Bước 1: nhập thông tin sự kiện và chọn loại sơ đồ bán vé. Sau khi tạo, bạn sẽ cấu hình khu vực / ghế / bàn ở bước tiếp theo.'}
                     </p>
                 </div>
             </div>
@@ -245,6 +351,7 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                         <input
                             type="datetime-local"
                             value={form.startTime}
+                            min={allowPastStart ? undefined : getNowLocalInputValue()}
                             onChange={(event) => update({ startTime: event.target.value })}
                             className={inputClass}
                         />
@@ -254,6 +361,7 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                         <input
                             type="datetime-local"
                             value={form.endTime}
+                            min={allowPastStart ? form.startTime || undefined : form.startTime || getNowLocalInputValue()}
                             onChange={(event) => update({ endTime: event.target.value })}
                             className={inputClass}
                         />
@@ -263,6 +371,7 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                         <input
                             type="datetime-local"
                             value={form.saleStartTime}
+                            max={form.endTime || undefined}
                             onChange={(event) => update({ saleStartTime: event.target.value })}
                             className={inputClass}
                         />
@@ -272,30 +381,52 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                         <input
                             type="datetime-local"
                             value={form.saleEndTime}
+                            max={form.endTime || undefined}
                             onChange={(event) => update({ saleEndTime: event.target.value })}
                             className={inputClass}
                         />
+                        <p className="mt-1 text-xs font-medium text-[#94A3B8]">
+                            Không được muộn hơn thời gian kết thúc sự kiện.
+                        </p>
                     </div>
 
                     <div>
-                        <label className={labelClass}>Ảnh thumbnail (URL)</label>
+                        <label className={labelClass}>Ảnh thumbnail</label>
                         <input
-                            type="text"
-                            value={form.thumbnailUrl}
-                            onChange={(event) => update({ thumbnailUrl: event.target.value })}
-                            placeholder="https://..."
-                            className={inputClass}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onChange={(event) => handleImageUpload('thumbnailUrl', event.target.files?.[0])}
+                            className="block w-full text-sm font-semibold text-[#334155] file:mr-3 file:rounded-lg file:border-0 file:bg-[#F43F73] file:px-3 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-[#e0356a]"
                         />
+                        {uploadingThumbnail && (
+                            <p className="mt-1.5 text-xs font-bold text-[#94A3B8]">Đang tải ảnh lên...</p>
+                        )}
+                        {form.thumbnailUrl && !uploadingThumbnail && (
+                            <img
+                                src={toAbsoluteImageUrl(form.thumbnailUrl)}
+                                alt="Xem trước thumbnail"
+                                className="mt-2 h-24 w-24 rounded-lg border border-[#DDE3EF] object-cover"
+                            />
+                        )}
                     </div>
                     <div>
-                        <label className={labelClass}>Ảnh banner (URL)</label>
+                        <label className={labelClass}>Ảnh banner</label>
                         <input
-                            type="text"
-                            value={form.bannerUrl}
-                            onChange={(event) => update({ bannerUrl: event.target.value })}
-                            placeholder="https://..."
-                            className={inputClass}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onChange={(event) => handleImageUpload('bannerUrl', event.target.files?.[0])}
+                            className="block w-full text-sm font-semibold text-[#334155] file:mr-3 file:rounded-lg file:border-0 file:bg-[#F43F73] file:px-3 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-[#e0356a]"
                         />
+                        {uploadingBanner && (
+                            <p className="mt-1.5 text-xs font-bold text-[#94A3B8]">Đang tải ảnh lên...</p>
+                        )}
+                        {form.bannerUrl && !uploadingBanner && (
+                            <img
+                                src={toAbsoluteImageUrl(form.bannerUrl)}
+                                alt="Xem trước banner"
+                                className="mt-2 h-24 w-full rounded-lg border border-[#DDE3EF] object-cover"
+                            />
+                        )}
                     </div>
 
                     <div className="sm:col-span-2">
@@ -313,9 +444,11 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                 <div>
                     <label className={labelClass}>Loại sơ đồ bán vé *</label>
                     <p className="mb-3 text-xs font-medium text-[#94A3B8]">
-                        Lưu ý: không thể đổi loại sơ đồ vé sau khi tạo sự kiện.
+                        {isEditMode
+                            ? 'Loại sơ đồ vé đã cố định từ lúc tạo, không thể đổi để tránh sai lệch với khu vực/ghế đã cấu hình.'
+                            : 'Lưu ý: không thể đổi loại sơ đồ vé sau khi tạo sự kiện.'}
                     </p>
-                    <TicketMapTypeSelector value={ticketMapType} onChange={setTicketMapType} />
+                    <TicketMapTypeSelector value={ticketMapType} onChange={setTicketMapType} disabled={isEditMode} />
                 </div>
 
                 <div className="flex justify-end gap-3 border-t border-[#E2E8F0] pt-5">
@@ -328,10 +461,14 @@ function AdminEventForm({ onCancel, onCreated }: Props) {
                     </button>
                     <button
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || uploadingThumbnail || uploadingBanner}
                         className="h-11 rounded-lg bg-[#F43F73] px-6 text-sm font-black text-white transition hover:bg-[#E11D5E] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        {submitting ? 'Đang tạo...' : 'Tạo sự kiện & tiếp tục cấu hình vé'}
+                        {submitting
+                            ? 'Đang lưu...'
+                            : isEditMode
+                              ? 'Lưu thay đổi'
+                              : 'Tạo sự kiện & tiếp tục cấu hình vé'}
                     </button>
                 </div>
             </form>

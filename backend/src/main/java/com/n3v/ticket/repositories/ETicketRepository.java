@@ -23,6 +23,16 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
 
     List<ETicket> findByUserIdOrderByCreatedAtDesc(Long userId);
 
+    List<ETicket> findByStatusAndEvent_EndTimeLessThanEqual(
+            TicketStatus status,
+            LocalDateTime endTime
+    );
+
+    List<ETicket> findByEventIdAndStatusIn(
+            Long eventId,
+            Collection<TicketStatus> statuses
+    );
+
     @Query("""
         SELECT ticket
         FROM ETicket ticket
@@ -43,6 +53,8 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
 
     long countByStatus(TicketStatus status);
 
+    long countByStatusIn(Collection<TicketStatus> statuses);
+
     long countByCreatedAtBetween(
             OffsetDateTime from,
             OffsetDateTime to
@@ -50,6 +62,12 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
 
     long countByStatusAndCreatedAtBetween(
             TicketStatus status,
+            OffsetDateTime from,
+            OffsetDateTime to
+    );
+
+    long countByStatusInAndCreatedAtBetween(
+            Collection<TicketStatus> statuses,
             OffsetDateTime from,
             OffsetDateTime to
     );
@@ -72,6 +90,7 @@ public interface ETicketRepository extends JpaRepository<ETicket, Long> {
             FROM e_tickets et
             WHERE et.created_at >= :fromDate
               AND et.created_at < :toDate
+              AND et.status <> 'CANCELLED'
             GROUP BY CAST(et.created_at AS DATE)
             ORDER BY CAST(et.created_at AS DATE)
             """,

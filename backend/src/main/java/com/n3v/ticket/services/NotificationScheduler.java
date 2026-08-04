@@ -7,6 +7,7 @@ import com.n3v.ticket.entities.Role;
 import com.n3v.ticket.entities.User;
 import com.n3v.ticket.enums.EventStatus;
 import com.n3v.ticket.enums.NotificationType;
+import com.n3v.ticket.enums.TicketStatus;
 import com.n3v.ticket.repositories.ETicketRepository;
 import com.n3v.ticket.repositories.EventRepository;
 import com.n3v.ticket.repositories.UserRepository;
@@ -52,6 +53,54 @@ public class NotificationScheduler {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final ReportService reportService;
+
+    /**
+     * Chuyển các vé chưa sử dụng sang EXPIRED ngay sau khi sự kiện kết thúc
+     * và gửi đúng một thông báo cho chủ vé.
+     */
+    @Scheduled(
+            cron = "15 * * * * *",
+            zone = "Asia/Ho_Chi_Minh"
+    )
+    @Transactional
+    public void expireUnusedTickets() {
+        LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
+
+        var expiredTickets =
+                eTicketRepository.findByStatusAndEvent_EndTimeLessThanEqual(
+                        TicketStatus.ISSUED,
+                        now
+                );
+
+        for (var ticket : expiredTickets) {
+            ticket.setStatus(TicketStatus.EXPIRED);
+            eTicketRepository.save(ticket);
+
+            notificationService.createNotification(
+                    CreateNotificationRequest.builder()
+                            .userId(ticket.getUser().getId())
+                            .type(NotificationType.TICKET_EXPIRED)
+                            .title("Vé đã hết hạn")
+                            .message(
+                                    "Vé "
+                                            + ticket.getTicketCode()
+                                            + " của sự kiện "
+                                            + ticket.getEvent().getName()
+                                            + " đã quá hạn và không còn sử dụng được."
+                            )
+                            .targetUrl("/my-tickets")
+                            .referenceType("TICKET")
+                            .referenceId(ticket.getId())
+                            .deduplicationKey(
+                                    "TICKET_EXPIRED_"
+                                            + ticket.getId()
+                                            + "_USER_"
+                                            + ticket.getUser().getId()
+                            )
+                            .build()
+            );
+        }
+    }
 
     /**
      * Chạy mỗi phút để tìm sự kiện:

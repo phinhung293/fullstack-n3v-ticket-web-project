@@ -7,7 +7,7 @@ import type { EventStatus, EventSummaryResponse } from '../../types/event';
 import { EVENT_STATUS_LABEL, TICKET_MAP_TYPE_LABEL } from '../../types/event';
 import { formatCurrency, formatDateTime } from '../../utils/format';
 
-type View = { name: 'list' } | { name: 'create' } | { name: 'configure'; eventId: number };
+type View = { name: 'list' } | { name: 'create' } | { name: 'edit'; eventId: number } | { name: 'configure'; eventId: number };
 
 const statusBadge: Record<EventStatus, string> = {
     DRAFT: 'bg-[#FEF3C7] text-[#B45309]',
@@ -67,8 +67,26 @@ function AdminEvents() {
         );
     }
 
+    if (view.name === 'edit') {
+        return (
+            <AdminEventForm
+                eventId={view.eventId}
+                onCancel={() => setView({ name: 'list' })}
+                onCreated={(eventId) => setView({ name: 'configure', eventId })}
+                onUpdated={() => {
+                    setView({ name: 'list' });
+                }}
+            />
+        );
+    }
+
     if (view.name === 'configure') {
-        return <AdminEventConfigure eventId={view.eventId} onBack={() => setView({ name: 'list' })} />;
+        return (
+            <AdminEventConfigure
+                eventId={view.eventId}
+                onBack={() => setView({ name: 'list' })}
+            />
+        );
     }
 
     return (
@@ -127,8 +145,8 @@ function AdminEvents() {
                 </div>
             )}
 
-            <div className="overflow-x-auto custom-scrollbar rounded-xl border border-[#E2E8F0] bg-white">
-                <table className="w-full min-w-[900px] table-fixed text-left text-sm">
+            <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white">
+                <table className="w-full table-fixed text-left text-sm">
                     <thead>
                         <tr className="border-b border-[#E2E8F0] bg-[#FBFCFE] text-xs font-black text-[#0B1736]">
                             <th className="w-[28%] px-3 py-4">Sự kiện</th>
@@ -199,20 +217,31 @@ function AdminEvents() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setView({ name: 'configure', eventId: eventItem.id })}
-                                                title="Sửa"
+                                                onClick={() => setView({ name: 'edit', eventId: eventItem.id })}
+                                                title="Sửa thông tin sự kiện"
                                                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] bg-white text-[#6D00FF] transition hover:bg-[#F3E8FF]"
                                             >
                                                 <Pencil size={15} strokeWidth={2.4} />
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDelete(eventItem)}
-                                                title="Xóa"
-                                                className="flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] bg-white text-[#EF321F] transition hover:bg-[#FEE2E2]"
-                                            >
-                                                <Trash2 size={15} strokeWidth={2.4} />
-                                            </button>
+                                            {eventItem.status === 'DRAFT' ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(eventItem)}
+                                                    title="Xóa"
+                                                    className="flex h-8 w-8 items-center justify-center rounded-md border border-[#DDE3EF] bg-white text-[#EF321F] transition hover:bg-[#FEE2E2]"
+                                                >
+                                                    <Trash2 size={15} strokeWidth={2.4} />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    disabled
+                                                    title="Chỉ xoá được sự kiện đang ở trạng thái Nháp (DRAFT). Sự kiện đã Publish (kể cả đã Hủy) được giữ lại để phục vụ báo cáo/doanh thu."
+                                                    className="flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md border border-[#DDE3EF] bg-[#F8FAFC] text-[#CBD5E1]"
+                                                >
+                                                    <Trash2 size={15} strokeWidth={2.4} />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
