@@ -19,7 +19,9 @@ export const connectNotificationSocket = (
     }
 
     notificationClient = new Client({
-        brokerURL: 'ws://localhost:8080/ws',
+        brokerURL: import.meta.env.VITE_API_URL 
+            ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws') + '/ws'
+            : 'ws://localhost:8080/ws',
 
         connectHeaders: {
             Authorization: `Bearer ${token}`,
